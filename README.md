@@ -41,6 +41,11 @@ to jump to its source, or let the preview follow your cursor. **Export ▾** off
 a browser PDF (instant) alongside server PDF/SVG/HTML/vector, and **Share
 preview** shows the pages a share link would serve.
 
+The editor is a real multi-file workspace: a file tree with folders, tabs, a
+project-wide search and replace, an outline, an issues panel, a command palette
+and a full keyboard shortcut set (`⇧⌘/` lists them). `#import` and `#include`
+resolve across files, and the whole workspace is saved to `localStorage`.
+
 ## Verify it
 
 ```bash
@@ -48,7 +53,11 @@ cd server && npm test        # 23 tests: engine, cache, paths, SVG splitting, HT
 cd glyph  && npm run build   # typecheck + production build
 ```
 
-Both packages also expose `npm run typecheck`.
+Both packages also expose `npm run typecheck`. The UI was verified headlessly
+with Playwright — 39 UI checks, 28 workspace checks (cross-file imports,
+diagnostics, click-to-source, replace, ZIP, reload), 13 server-split checks and 5
+offline-degradation checks, all passing against both `vite dev` and the
+production build.
 
 ## Layout
 
@@ -65,9 +74,13 @@ typst-app-auth/   reverse-engineering artifacts (findings + exported API spec)
 - **M1 — the compiler core: done.** Live compilation, syntax highlighting,
   completion, hover, formatting, diagnostics with squiggles, click-to-source, and
   follow-cursor, verified headlessly in both `vite dev` and the production build.
+- **Editor feature set: done.** Multi-file workspace (folders, tabs, drag-to-move,
+  rename cascade, upload), project-wide search and replace, lexical outline,
+  issues panel, settings, command palette, context menus, keyboard shortcuts,
+  ZIP export and `localStorage` persistence — all in the same two headless
+  suites.
 - **Server render service: done.** Native Typst with a warm worker pool, a
   byte-budgeted render cache, in-flight coalescing, per-page SVG splitting, and a
   query API. 0.7 ms warm for a one-page PDF; ~1400 req/s at concurrency 16.
 - **Next:** M2 — auth, accounts, and the dashboard. See
   [`plan.md`](./plan.md) §14 for the milestone list.
-# Glyph

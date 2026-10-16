@@ -410,18 +410,62 @@ Mirror the observed endpoint + Yjs binary protocol:
 ### 7.2 Editor composition
 
 ```
-EditorRoute
-├─ Banner (wordmark · File/Edit/View/Help menus · doc title · Online status)
-├─ LeftRail (Explore files · Search · Outline · Issues · Settings · Universe · Help)
-├─ EditorPane     CodeMirror 6 + typst language + toolbar + lint/diagnostics + completions
+EditorRoute (glyph/src/App.tsx)
+├─ MenuBar        wordmark · File / Edit / View / Help dropdowns · theme · Export
+├─ LeftRail       Files · Search · Outline · Issues · Settings (⌥1…⌥5)
+├─ EditorPane     TabBar + EditorToolbar + CodeMirror 6
+│                 (per-file EditorState cache; lint / completion / hover / format
+│                  all driven by the engine through a live path getter)
 ├─ PreviewPane    SVG pages · zoom · click-to-source · follow-cursor · scroll-sync
-├─ Panels         FilePanel · SearchPanel · OutlinePanel · ImprovePanel · SettingsPanel
-└─ Dialogs        Share · Export · Present (Pro) · Templates
+├─ Panels         FilePanel · SearchPanel · OutlinePanel · IssuesPanel · SettingsPanel
+├─ StatusBar      path · entry badge · compile state · error/warning counts ·
+│                 pages · words · Ln/Col · server pill
+└─ Overlays       CommandPalette · ContextMenu · ShortcutsDialog · AboutDialog ·
+                  ServerPreview
 ```
 
-Mirror recovered UI affordances exactly where they encode behavior:
-toolbar buttons, File/Edit/View menu items, Export menu (PDF/PNG/SVG/HTML/
-archive), Share dialog (read-only / review-only / read-write + email invites).
+Mirror recovered UI affordances exactly where they encode behavior: toolbar
+buttons, File/Edit/View menu items, Export menu (PDF/PNG/SVG/HTML/archive),
+Share dialog (read-only / review-only / read-write + email invites).
+
+**As built (M1).** The pane is a real multi-file editor, not a single buffer:
+
+- **Two stores, two update frequencies.** `Workspace`
+  (`workspace/useWorkspace.ts`) owns files, folders, tabs, entry, dirty flags and
+  persistence; `CursorStore` (`editor/cursorStore.ts`) owns the selection. Only
+  the status bar, outline and search panels subscribe to the cursor, so a
+  keystroke re-renders those three nodes and never the app. App state changes
+  only on a dirty flip, a structural change, or a compile-status transition.
+- **One `EditorView`, one `EditorState` per file.** Switching tabs is
+  `view.setState(cached)`, which preserves per-file undo history and cursor for
+  free. Cached states are rebuilt if their doc text no longer matches the
+  workspace (self-healing after a project-wide replace).
+  `EditorView.setState` does not run update listeners, so the host re-emits
+  selection/cursor itself after a swap.
+- **Engine extensions take a path getter** (`() => string`) rather than a fixed
+  path, so a tab switch never rebuilds the extension set.
+- **Diagnostics are flushed one microtask late.** Dispatching from inside a
+  CodeMirror update throws; the lint pass is queued with `queueMicrotask` and
+  re-run for the active file via a `refreshLint` effect after each swap.
+- **The file tree is implied by paths plus an explicit `folders: string[]`**, so
+  empty folders exist. Folder rename/delete cascade to contained files; rename is
+  `setText(new) + remove(old)` because the engine has no rename.
+- **Outline and search are lexical**, not engine calls: `extractOutline` is a
+  synchronous scan of headings, and search/replace scans every text file with
+  case / regex / whole-word toggles and `$1` group refs. Both therefore work with
+  the engine cold and cost nothing while typing.
+- **Zoom is decoupled from rendering.** Pages are fetched once per compile; zoom
+  only rewrites each page's width (`PT_TO_PX = 96/72`, 24 px gutter), so changing
+  zoom never re-invokes the compiler.
+- **One `document` keydown listener** with `capture: true` owns every shortcut
+  (the editor gets `keybindings={[]}`), keyed on `event.code` so it is
+  layout-independent. `⌥W` closes a tab — `⌘W` cannot be intercepted in Chrome.
+- **Persistence** is localStorage: `glyph.workspace.v1` (text files, folders,
+  entry, tabs, active) and `glyph.settings.v1` (theme, font, tab size, wrap,
+  zoom, panel, split). "Dirty" means changed since the last debounced persist
+  (600 ms); binary uploads are session-only.
+- **Project download is a hand-written uncompressed ZIP writer**
+  (`workspace/zip.ts`) — no extra dependency.
 
 ### 7.3 Pure frontend modules (`@glyph/typst-runtime`)
 
@@ -469,6 +513,13 @@ await project.highlight(src, viewportFrom, viewportTo); // -> typ-* spans
 7. Debounce recompiles and drop stale results; warm the worker once at load.
 8. `@vedivad/codemirror-typst` is **not installable** (its published manifest
    depends on `workspace:^`), so the CodeMirror glue is ours.
+9. **`clickJump` only resolves inside a text run's box**, and lines are ~21 pt
+   apart with ~11 pt of ink — a click in the leading resolves nothing. `glyph`
+   creates the navigator with `listen: false` and probes outward from the click
+   (±3, ±6, … pt) so a near-miss still reaches the nearest line.
+10. **`EditorView.setState` skips update listeners** — the multi-file host
+    re-emits selection/cursor manually, and lint flushes go through
+    `queueMicrotask` because dispatching inside an update throws.
 
 ---
 
@@ -660,15 +711,32 @@ Each milestone is shippable and has explicit acceptance criteria.
 > a byte-budgeted render cache, in-flight coalescing, and per-page SVG splitting.
 > The editor keeps compiling locally and reaches the service only for durable
 > artifacts — an **Export** menu (PDF in the browser; PDF/SVG/HTML/vector on the
-> server), a live **server indicator** in the toolbar, and a **Share preview**
+> server), a live **server indicator** in the status bar, and a **Share preview**
 > overlay showing exactly the pages a share link would serve. Vite proxies `/api`
 > to the service in development, so no CORS setup is needed; without a running
 > service the editor degrades to browser-only rather than breaking. Verified
-> headlessly: 12/12 Playwright checks in `vite dev` (server pill reports
-> `typst.ts 0.7.0`, export menu lists all six actions, a server PDF download is a
-> real `%PDF-`, the share preview renders server pages whose geometry matches the
-> local preview to within a rounding point, Escape closes it, zero console
-> errors) and 23/23 render-service tests.
+> headlessly: 13/13 Playwright checks in `vite dev` (server pill reports
+> `typst.ts 0.7.0` with workers and cache hits in its tooltip, the export menu
+> lists all seven actions, a server PDF download is a real `%PDF-`, the share
+> preview renders server pages whose geometry matches the local preview to within
+> a rounding point, Escape closes it, zero console errors), 5/5 offline-degradation
+> checks, and 23/23 render-service tests.
+>
+> **Status (editor).** The editor is now a full multi-file application rather than
+> a single buffer: file tree with folders, inline rename/create, drag-to-move and
+> upload; tabs with per-file undo history; project-wide search and replace;
+> lexical outline; issues panel wired to compile diagnostics; settings; command
+> palette; context menus; keyboard shortcut set; a hand-written ZIP export; and
+> localStorage persistence. The composition and its two-store design are described
+> in §7.2. Verified headlessly with two further suites — **39/39** UI checks
+> (panels, palette, dialogs, theme, splitter, persistence, no console errors) and
+> **28/28** workspace checks (folders, rename cascade, drag-move, cross-file
+> `#import` compiling with a negative control that removes the import, squiggles +
+> gutter markers + issue list, click-to-source reaching several lines, project-wide
+> replace, ZIP contents, reload) — in **both** `vite dev` and the production
+> build. Click-to-source needed a fix: the engine's `clickJump` only resolves
+> points inside a text run's box, so the host probes a few points outward from the
+> click before giving up.
 
 ### M2 — Auth, accounts, dashboard (1 week)
 - Signup/signin/signout, sessions, email verify (Mailpit), reset, dashboard
