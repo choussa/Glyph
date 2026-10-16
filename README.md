@@ -70,3 +70,4 @@ typst-app-auth/   reverse-engineering artifacts (findings + exported API spec)
   query API. 0.7 ms warm for a one-page PDF; ~1400 req/s at concurrency 16.
 - **Next:** M2 — auth, accounts, and the dashboard. See
   [`plan.md`](./plan.md) §14 for the milestone list.
+# Glyph
