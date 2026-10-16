@@ -1,0 +1,7 @@
+# step 12
+== REQUEST ==
+{"operationName":"GetBillingInfo","variables":{},"query":"query GetBillingInfo {\n  user {\n    billingInformation {\n      countryCode\n      region\n      postalCode\n      fullName\n      firstLine\n      secondLine\n      city\n      business {\n        name\n        vatId\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}"}
+
+== RESPONSE ==
+{"data":{"user":{"billingInformation":null,"__typename":"User"}}}
+

@@ -1,0 +1,7 @@
+# step 5
+== REQUEST ==
+{"operationName":"Features","variables":{},"query":"query Features {\n  user {\n    id\n    telemetryLevel\n    __typename\n  }\n  features {\n    ...CoreFeatureFields\n    __typename\n  }\n}\n\nfragment CoreFeatureFields on Feature {\n  name\n  expires\n  metric\n  __typename\n}"}
+
+== RESPONSE ==
+{"data":{"user":{"id":"azJHYE782zjTUnjxYfmtIN","telemetryLevel":"FULL","__typename":"User"},"features":[{"name":"storage-subscription","expires":null,"metric":204800,"__typename":"Feature"},{"name":"zotero-sync","expires":null,"metric":null,"__typename":"Feature"},{"name":"mendeley-sync","expires":null,"metric":null,"__typename":"Feature"},{"name":"github-sync","expires":null,"metric":null,"__typename":"Feature"},{"name":"gitlab-sync","expires":null,"metric":null,"__typename":"Feature"}]}}
+

@@ -1,0 +1,7 @@
+# step 11
+== REQUEST ==
+{"operationName":"ProjectFileIds","variables":{"projectIds":["pzqvuEYTS5Z8rJgKMNwYpH"]},"query":"query ProjectFileIds($projectIds: [ID!]!) {\n  projectFiles(ids: $projectIds) {\n    id\n    files {\n      id\n      isMultiplayable\n      __typename\n    }\n    __typename\n  }\n}"}
+
+== RESPONSE ==
+{"data":{"projectFiles":[{"id":"pzqvuEYTS5Z8rJgKMNwYpH","files":[{"id":"f9gzHyypODvZyqjrrZjMQ3","isMultiplayable":true,"__typename":"File"}],"__typename":"ProjectFiles"}]}}
+

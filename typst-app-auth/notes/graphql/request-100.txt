@@ -1,0 +1,7 @@
+# step 8
+== REQUEST ==
+{"operationName":"UserIntegrationsQuery","variables":{},"query":"query UserIntegrationsQuery {\n  user {\n    id\n    zotero {\n      id\n      userName\n      __typename\n    }\n    mendeley {\n      id\n      userName\n      __typename\n    }\n    vcs {\n      id\n      backend\n      userName\n      __typename\n    }\n    __typename\n  }\n}"}
+
+== RESPONSE ==
+{"data":{"user":{"id":"azJHYE782zjTUnjxYfmtIN","zotero":null,"mendeley":null,"vcs":[],"__typename":"User"}}}
+

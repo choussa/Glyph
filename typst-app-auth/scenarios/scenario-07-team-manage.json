@@ -1,0 +1,35 @@
+{
+  "browser": {
+    "mode": "launch",
+    "executable_path": "/home/codespace/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome",
+    "headless": true
+  },
+  "start_url": { "url": "https://typst.app/signin/" },
+  "environment": {
+    "service_workers": "allow",
+    "viewport": { "width": 1600, "height": 1100, "device_scale_factor": 1 }
+  },
+  "secrets": [
+    { "secret_id": "typst_email", "environment_variable": "TYPST_EMAIL" },
+    { "secret_id": "typst_password", "environment_variable": "TYPST_PASSWORD" }
+  ],
+  "actions": [
+    { "step_id": "email-ready", "action": "wait_for", "locator": { "kind": "css", "selector": "#email" }, "state": "visible", "timeout_ms": 30000 },
+    { "step_id": "fill-email", "action": "fill", "locator": { "kind": "css", "selector": "#email" }, "value": { "source": "secret", "secret_id": "typst_email" } },
+    { "step_id": "fill-password", "action": "fill", "locator": { "kind": "css", "selector": "#password" }, "value": { "source": "secret", "secret_id": "typst_password" } },
+    { "step_id": "submit-signin", "action": "click", "locator": { "kind": "css", "selector": "input[type=submit]" }, "timeout_ms": 30000 },
+    { "step_id": "post-signin-settle", "action": "wait_for_timeout", "duration_ms": 10000 },
+    { "step_id": "goto-team-manage", "action": "goto", "destination": { "url": "https://typst.app/team/awKOdRGIzHBGLwoB0oaBy8/manage" }, "wait_until": "load", "timeout_ms": 60000 },
+    { "step_id": "team-manage-settle", "action": "wait_for_timeout", "duration_ms": 14000 },
+    { "step_id": "goto-team", "action": "goto", "destination": { "url": "https://typst.app/team/awKOdRGIzHBGLwoB0oaBy8" }, "wait_until": "load", "timeout_ms": 60000 },
+    { "step_id": "team-settle", "action": "wait_for_timeout", "duration_ms": 10000 },
+    { "step_id": "open-invite", "action": "click", "locator": { "kind": "role", "role": "button", "name": "Invite team members" }, "timeout_ms": 15000 },
+    { "step_id": "invite-settle", "action": "wait_for_timeout", "duration_ms": 3000 }
+  ],
+  "capture": {
+    "after_each_step": ["accessibility", "url"],
+    "at_end": ["dom", "url", "screenshot"],
+    "events": ["console", "page-errors", "network"],
+    "network": { "request_body": true, "response_body": true, "header_values": true }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "browser": {
+    "mode": "launch",
+    "executable_path": "/home/codespace/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome",
+    "headless": true
+  },
+  "start_url": { "url": "https://typst.app/signin/" },
+  "environment": {
+    "service_workers": "allow",
+    "viewport": { "width": 1440, "height": 960, "device_scale_factor": 1 }
+  },
+  "secrets": [
+    { "secret_id": "typst_email", "environment_variable": "TYPST_EMAIL" },
+    { "secret_id": "typst_password", "environment_variable": "TYPST_PASSWORD" }
+  ],
+  "actions": [
+    { "step_id": "email-ready", "action": "wait_for", "locator": { "kind": "css", "selector": "#email" }, "state": "visible", "timeout_ms": 30000 },
+    { "step_id": "fill-email", "action": "fill", "locator": { "kind": "css", "selector": "#email" }, "value": { "source": "secret", "secret_id": "typst_email" } },
+    { "step_id": "fill-password", "action": "fill", "locator": { "kind": "css", "selector": "#password" }, "value": { "source": "secret", "secret_id": "typst_password" } },
+    { "step_id": "submit-signin", "action": "click", "locator": { "kind": "css", "selector": "input[type=submit]" }, "timeout_ms": 30000 },
+    { "step_id": "post-signin-settle", "action": "wait_for_timeout", "duration_ms": 12000 },
+    { "step_id": "goto-app", "action": "goto", "destination": { "url": "https://typst.app/app/" }, "wait_until": "load", "timeout_ms": 60000 },
+    { "step_id": "app-settle", "action": "wait_for_timeout", "duration_ms": 15000 },
+    { "step_id": "goto-settings", "action": "goto", "destination": { "url": "https://typst.app/settings" }, "wait_until": "load", "timeout_ms": 60000 },
+    { "step_id": "settings-settle", "action": "wait_for_timeout", "duration_ms": 10000 },
+    { "step_id": "goto-subscription", "action": "goto", "destination": { "url": "https://typst.app/settings/subscription" }, "wait_until": "load", "timeout_ms": 60000 },
+    { "step_id": "subscription-settle", "action": "wait_for_timeout", "duration_ms": 10000 },
+    { "step_id": "goto-pro", "action": "goto", "destination": { "url": "https://typst.app/pro/" }, "wait_until": "load", "timeout_ms": 60000 },
+    { "step_id": "pro-settle", "action": "wait_for_timeout", "duration_ms": 8000 },
+    { "step_id": "goto-home", "action": "goto", "destination": { "url": "https://typst.app/" }, "wait_until": "load", "timeout_ms": 60000 },
+    { "step_id": "home-settle", "action": "wait_for_timeout", "duration_ms": 10000 }
+  ],
+  "capture": {
+    "after_each_step": ["accessibility", "url"],
+    "at_end": ["dom", "url", "screenshot", "storage"],
+    "events": ["console", "page-errors", "network"],
+    "network": { "request_body": true, "response_body": true, "header_values": true }
+  }
+}

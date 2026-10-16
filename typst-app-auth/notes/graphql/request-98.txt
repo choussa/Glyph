@@ -1,0 +1,7 @@
+# step 8
+== REQUEST ==
+{"operationName":"UserMfa","variables":{},"query":"query UserMfa {\n  user {\n    id\n    mfa {\n      enabledAt\n      backupCodesRemaining\n      backupCodesGeneratedAt\n      allowSupportRecovery\n      __typename\n    }\n    __typename\n  }\n}"}
+
+== RESPONSE ==
+{"data":{"user":{"id":"azJHYE782zjTUnjxYfmtIN","mfa":null,"__typename":"User"}}}
+

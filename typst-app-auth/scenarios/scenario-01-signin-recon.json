@@ -1,0 +1,18 @@
+{
+  "browser": {
+    "mode": "launch",
+    "executable_path": "/home/codespace/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome"
+  },
+  "start_url": { "url": "https://typst.app/app/" },
+  "environment": {
+    "service_workers": "allow",
+    "viewport": { "width": 1280, "height": 900, "device_scale_factor": 1 }
+  },
+  "actions": [
+    { "step_id": "settle", "action": "wait_for_timeout", "duration_ms": 9000 }
+  ],
+  "capture": {
+    "at_end": ["dom", "accessibility", "url", "screenshot"],
+    "events": ["console", "page-errors", "network"]
+  }
+}

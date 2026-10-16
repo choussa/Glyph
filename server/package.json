@@ -1,0 +1,25 @@
+{
+  "name": "@glyph/render",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "glyph render service — server-side Typst (typst.ts native compiler) for share previews, thumbnails and exports.",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "node --watch src/index.ts",
+    "start": "node src/index.ts",
+    "test": "node --test 'test/**/*.test.ts'",
+    "typecheck": "tsc --noEmit",
+    "bench": "node bench/bench.ts"
+  },
+  "dependencies": {
+    "@myriaddreamin/typst.ts": "0.7.0",
+    "@myriaddreamin/typst-ts-node-compiler": "0.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,2123 @@
+### fragment CoreAgentFields
+fragment CoreAgentFields on Agent {
+    id
+    name
+    avatar
+  }
+
+### fragment CoreCommentFields
+fragment CoreCommentFields on Comment {
+    id
+    fileId
+    createdBy {
+      id
+      name
+    }
+    created
+    modified
+    content
+    resolved
+    from
+    to
+    replies {
+      ...CoreCommentReplyFields
+    }
+  }
+
+### fragment CoreCommentReplyFields
+fragment CoreCommentReplyFields on CommentReply {
+    id
+    createdBy {
+      id
+      name
+    }
+    created
+    modified
+    content
+  }
+
+### fragment CoreFeatureFields
+fragment CoreFeatureFields on Feature {
+    name
+    expires
+    metric
+  }
+
+### fragment CoreFileFields
+fragment CoreFileFields on File {
+    id
+    name
+    isMultiplayable
+    lastChange {
+      date
+    }
+    size
+    version
+    magicKind
+    etag
+  }
+
+### fragment CoreGrantSubscriptionFields
+fragment CoreGrantSubscriptionFields on GrantSubscription {
+    reason
+    active
+    grantPeriod: period {
+      startsAt
+      endsAt
+    }
+  }
+
+### fragment CorePaymentMethodFields
+fragment CorePaymentMethodFields on PaymentMethod {
+    id
+    type
+    card {
+      type
+      last4
+      expiryMonth
+      expiryYear
+      cardholderName
+    }
+  }
+
+### fragment CoreProjectFields
+fragment CoreProjectFields on Project {
+    id
+    name
+    created
+    modified
+    owner {
+      ...CoreAgentFields
+    }
+    access {
+      canWrite
+      canReview
+      canManage
+    }
+    thumbnail {
+      id
+      url
+    }
+    packages {
+      name
+      version
+      created
+    }
+    folder {
+      id
+    }
+  }
+
+### fragment CoreSubscriptionFields
+fragment CoreSubscriptionFields on SubscriptionLike {
+    id
+    plan
+    ...CoreUserSubscriptionFields
+    ...CoreGrantSubscriptionFields
+  }
+
+### fragment CoreUserSubscriptionFields
+fragment CoreUserSubscriptionFields on UserSubscription {
+    status
+  }
+
+### fragment DashboardUserFragment
+fragment DashboardUserFragment on User {
+    ...CoreAgentFields
+    email {
+      id
+      address
+      confirmed
+    }
+    emailOptin
+    projects {
+      ...CoreProjectFields
+    }
+    externalProjects {
+      ...CoreProjectFields
+    }
+    teams {
+      ...TeamFields
+    }
+    telemetryLevel
+    settings
+    teamInvitations {
+      id
+      teamId
+      teamName
+      teamAvatar
+      invited
+      asAdmin
+    }
+    projectInvitations {
+      id
+      projectId
+      projectName
+      projectOwner {
+        ...CoreAgentFields
+      }
+      canWrite
+      canReview
+    }
+    headsUp {
+      id
+      title
+      lastConfirmed
+      current
+      content
+    }
+    subscriptions {
+      ...CoreSubscriptionFields
+    }
+    terms {
+      version
+      state
+    }
+    feed {
+      id
+      title
+      created
+      anchor
+      unread
+    }
+    folders {
+      ...FolderFields
+    }
+    personalWorkspaceAccessError
+  }
+
+### fragment DetailedEmailFields
+fragment DetailedEmailFields on Email {
+    id
+    address
+    confirmed
+    primary
+    academic
+    sso {
+      id
+      team {
+        id
+        name
+      }
+    }
+  }
+
+### fragment DetailedSubscriptionFields
+fragment DetailedSubscriptionFields on UserSubscription {
+    annual
+    nextBilledAt
+    willCancel
+    willPause
+    canCancelEarly
+    period {
+      endsAt
+    }
+    paymentMethod {
+      ...CorePaymentMethodFields
+    }
+  }
+
+### fragment DomainFields
+fragment DomainFields on Domain {
+    id
+    domain
+    verification {
+      labelPrefix
+      tokenPrefix
+      lastVerified
+      active
+    }
+  }
+
+### fragment FolderFields
+fragment FolderFields on Folder {
+    id
+    name
+    created
+    modified
+    parent {
+      id
+    }
+    owner {
+      id
+    }
+  }
+
+### fragment MendeleyFolderFragment
+fragment MendeleyFolderFragment on MendeleyFolder {
+    id
+    name
+  }
+
+  fragment RecursiveMendeleyFolderFragment on MendeleyFolder {
+    ...MendeleyFolderFragment
+    children {
+      ...MendeleyFolderFragment
+      children {
+        ...MendeleyFolderFragment
+        children {
+          ...MendeleyFolderFragment
+        }
+      }
+    }
+  }
+
+  fragment MendeleyUser on User {
+    mendeley {
+      id
+      groups {
+        id
+        name
+        folders {
+          ...RecursiveMendeleyFolderFragment
+        }
+      }
+      folders {
+        ...RecursiveMendeleyFolderFragment
+      }
+    }
+  }
+
+### fragment NewRevisionsFragment
+fragment NewRevisionsFragment on ProjectVcs {
+    id
+    newRevisions {
+      message
+      author {
+        name
+        email
+      }
+    }
+  }
+
+### fragment OidcProviderFields
+fragment OidcProviderFields on OidcProvider {
+    id
+    displayName
+    domains {
+      id
+      domain
+    }
+    created
+    isAssociated {
+      id
+      associatedEmail
+    }
+    connected {
+      id
+    }
+  }
+
+### fragment OidcProviderSettingsFields
+fragment OidcProviderSettingsFields on OidcProvider {
+    id
+    displayName
+    issuer
+    clientId
+    authorizationEndpoint
+    tokenEndpoint
+    tokenEndpointAuth
+    pkce
+    userInfoEndpoint
+    algorithms
+    jwks {
+      ... on JwksUrl {
+        url
+      }
+      ... on JwksDocument {
+        document
+      }
+    }
+    discovery {
+      url
+    }
+    claimsDeclarationMethod {
+      ... on ClaimsParameter {
+        claimsSupported
+      }
+      ... on ClaimsScopeSec54 {
+        section54
+      }
+      ... on ClaimsScopeManual {
+        scopes
+      }
+    }
+    claimsSource {
+      nameClaim
+      emailClaim
+      hasEmailVerified
+      avatarClaim
+      avatarAuthenticated
+    }
+    scopesSupported
+    claimsSupported
+    supportsClaimsParameter
+    serviceDocumentationUrl
+    privacyPolicyUrl
+    tosUrl
+    domains {
+      id
+      domain
+    }
+    connected {
+      id
+      user {
+        id
+        name
+        avatar
+      }
+      associatedEmail
+    }
+    created
+    isAssociated {
+      id
+      associatedEmail
+    }
+  }
+
+### fragment PendingOidcProviderFields
+fragment PendingOidcProviderFields on PendingOidcProvider {
+    id
+    issuer
+    authorizationEndpoint
+    tokenEndpoint
+    tokenEndpointAuth
+    userInfoEndpoint
+    pkce
+    hasCredentials
+    discovery {
+      url
+    }
+    clientId
+    jwks {
+      ... on JwksUrl {
+        url
+      }
+      ... on JwksDocument {
+        document
+      }
+    }
+    supportsClaimsParameter
+    claimsDeclarationMethod {
+      ... on ClaimsParameter {
+        claimsSupported
+      }
+      ... on ClaimsScopeSec54 {
+        section54
+      }
+      ... on ClaimsScopeManual {
+        scopes
+      }
+    }
+    claimsSource {
+      nameClaim
+      emailClaim
+      hasEmailVerified
+      avatarClaim
+      avatarAuthenticated
+    }
+    domains {
+      domain
+    }
+    scopesSupported
+    claimsSupported
+    serviceDocumentationUrl
+    algorithms
+    testResult {
+      ... on OidcTestSuccess {
+        sub
+        name
+        email
+        emailConfirmed
+        avatarUrl
+        idTokenAlg
+        idTokenClaims
+        userInfoClaims
+      }
+      ... on OidcTestFailure {
+        errorCodes
+        errorDescription
+        errorUri
+        stage {
+          __typename
+          ... on OidcTestTokenStage {
+            details {
+              ... on OidcTestTokenNotOk {
+                httpStatus
+                wwwAuthenticate {
+                  kind
+                  error
+                  rawValue
+                }
+                contentType
+                body
+              }
+              ... on OidcTestTokenParse {
+                body
+              }
+              ... on OidcTestTokenIdTokenParse {
+                raw
+                unsupported
+              }
+              ... on OidcTestTokenIdTokenDisallowedAlg {
+                alg
+              }
+              ... on OidcTestTokenIdTokenVerify {
+                alg
+              }
+              ... on OidcTestTokenIdTokenSemantics {
+                claims
+                foundAlg
+                failingClaim
+                expired
+              }
+            }
+          }
+          ... on OidcTestUserInfoStage {
+            idTokenClaims
+            details {
+              ... on OidcTestUserInfoNotOk {
+                httpStatus
+                wwwAuthenticate {
+                  kind
+                  error
+                  rawValue
+                }
+                contentType
+                body
+              }
+              ... on OidcTestUserInfoParse {
+                body
+              }
+              ... on OidcTestUserInfoMissingClaim {
+                claim
+                claims
+              }
+              ... on OidcTestUserInfoDomainMismatch {
+                email
+                emailDomain
+                domains
+                claims
+              }
+              ... on OidcTestUserInfoClaimMismatch {
+                claim
+                expected
+                got
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+### fragment ProjectFilesFragment
+fragment ProjectFilesFragment on Project {
+    ...ProjectMetaFragment
+    files {
+      ...CoreFileFields
+    }
+    comments {
+      ...CoreCommentFields
+    }
+  }
+
+### fragment ProjectInviteFields
+fragment ProjectInviteFields on ProjectInvitation {
+    id
+    email
+    canWrite
+    canReview
+  }
+
+### fragment ProjectMetaFragment
+fragment ProjectMetaFragment on Project {
+    id
+    name
+    modified
+    owner {
+      ...CoreAgentFields
+    }
+    shareLinkReadOnly
+    shareLinkReviewOnly
+    shareLinkReadWrite
+    externalMembers {
+      user {
+        ...CoreAgentFields
+      }
+      canReview
+      canWrite
+    }
+    access {
+      canReview
+      canWrite
+      canManage
+    }
+    previewed
+    pinnedVersion
+    thumbnail {
+      id
+    }
+    features {
+      ...CoreFeatureFields
+    }
+    vcs {
+      ...ProjectVcsFields
+    }
+    packages {
+      name
+      version
+      created
+    }
+    sharedPackages {
+      name
+      latestVersion
+      shared
+    }
+    pendingInvitations {
+      ...ProjectInviteFields
+    }
+    folder {
+      id
+      name
+    }
+    settings
+  }
+
+### fragment ProjectUserFragment
+fragment ProjectUserFragment on User {
+    ...CoreAgentFields
+    email {
+      id
+      address
+    }
+    folders {
+      id
+      name
+      parent {
+        id
+      }
+    }
+    settings
+    teams {
+      id
+      name
+      folders {
+        id
+        name
+        parent {
+          id
+        }
+      }
+      workspaceAccessError
+    }
+    subscriptions {
+      ...CoreSubscriptionFields
+    }
+    personalWorkspaceAccessError
+  }
+
+### fragment ProjectVcsFields
+fragment ProjectVcsFields on ProjectVcs {
+    id
+    backend
+    repoUrl
+    ref
+    name
+    subDir
+    backendUser {
+      remoteName
+      remoteUrl
+      id
+    }
+    lastPushDate
+  }
+
+### fragment TeamFields
+fragment TeamFields on Team {
+    ...CoreAgentFields
+    projects {
+      ...CoreProjectFields
+    }
+    folders {
+      ...FolderFields
+    }
+    workspaceAccessError
+    idps(ifInaccessible: true) {
+      id
+      displayName
+      domains {
+        id
+        domain
+        verification {
+          active
+        }
+      }
+      isAssociated {
+        id
+        associatedEmail
+      }
+    }
+  }
+
+### fragment TeamInviteFields
+fragment TeamInviteFields on TeamInvitation {
+    id
+    email
+    asAdmin
+  }
+
+### fragment TransactionsFields
+fragment TransactionsFields on SubscriptionTransaction {
+    id
+    status
+    billedAt
+    tax
+    total
+    grandTotal
+    currencyCode
+    subscriptionId
+    paymentMethod {
+      ...CorePaymentMethodFields
+    }
+  }
+
+### fragment ZoteroCollectionFragment
+fragment ZoteroCollectionFragment on ZoteroCollection {
+    id
+    name
+    length
+  }
+
+  fragment RecursiveZoteroCollectionFragment on ZoteroCollection {
+    ...ZoteroCollectionFragment
+    children {
+      ...ZoteroCollectionFragment
+      children {
+        ...ZoteroCollectionFragment
+        children {
+          ...ZoteroCollectionFragment
+        }
+      }
+    }
+  }
+
+  fragment ZoteroUser on User {
+    zotero {
+      id
+      groups {
+        id
+        name
+        collections {
+          ...RecursiveZoteroCollectionFragment
+        }
+      }
+      collections {
+        ...RecursiveZoteroCollectionFragment
+      }
+    }
+  }
+
+### mutation AcceptTos
+mutation AcceptTos {
+    acceptTermsChangeEarly {
+      version
+      state
+    }
+  }
+
+### mutation AddEmailMutation
+mutation AddEmailMutation($email: String!) {
+    addEmail(email: $email) {
+      ...DetailedEmailFields
+    }
+  }
+
+### mutation AddNative
+mutation AddNative($password: String!, $code: String) {
+    addNative(password: $password, code: $code)
+  }
+
+### mutation AddPassword
+mutation AddPassword($newPassword: String!) {
+    addPassword(newPassword: $newPassword) {
+      id
+      hasPassword
+    }
+  }
+
+### mutation AddTeamDomainMutation
+mutation AddTeamDomainMutation($teamId: ID!, $domain: String!) {
+    addTeamDomain(teamId: $teamId, domain: $domain) {
+      teamId
+      domain {
+        ...DomainFields
+      }
+      verificationToken
+    }
+  }
+
+### mutation AuthorizeOAuth
+mutation AuthorizeOAuth($service: OAuthService!) {
+    authorizeOAuth(service: $service)
+  }
+
+### mutation BeginMfaEnrollment
+mutation BeginMfaEnrollment($password: String!) {
+    beginMfaEnrollment(password: $password) {
+      totp {
+        secret
+        otpauthUri
+      }
+      backupCodes
+    }
+  }
+
+### mutation BeginMfaTotpChange
+mutation BeginMfaTotpChange($password: String!, $code: String!) {
+    beginMfaTotpChange(password: $password, code: $code) {
+      secret
+      otpauthUri
+    }
+  }
+
+### mutation CancelSubscription
+mutation CancelSubscription($immediately: Boolean!) {
+    cancelSubscription(immediately: $immediately)
+  }
+
+### mutation ChangeBillingCycle
+mutation ChangeBillingCycle($annual: Boolean!) {
+    changeBillingCycle(annual: $annual)
+  }
+
+### mutation ChangePaymentMethod
+mutation ChangePaymentMethod {
+    getPaymentInfoChangeTransactionId
+  }
+
+### mutation ClearUserInfoSource
+mutation ClearUserInfoSource {
+    clearUserInfoSource {
+      id
+      name
+      avatar
+      userInfoSource {
+        id
+      }
+    }
+  }
+
+### mutation CollectMarketResponse
+mutation CollectMarketResponse(
+    $organizationName: String!
+    $contact: CommercialContact!
+    $about: String!
+  ) {
+    collectMarketResponse(
+      organizationName: $organizationName
+      contact: $contact
+      about: $about
+    )
+  }
+
+### mutation CollectNps
+mutation CollectNps($score: Int, $comment: String) {
+    collectNpsResponse(score: $score, comment: $comment)
+  }
+
+### mutation ConfirmMfaEnrollment
+mutation ConfirmMfaEnrollment(
+    $code: String!
+    $backupCodes: [String!]!
+    $allowSupportRecovery: Boolean!
+  ) {
+    confirmMfaEnrollment(
+      code: $code
+      backupCodes: $backupCodes
+      allowSupportRecovery: $allowSupportRecovery
+    ) {
+      enabledAt
+      backupCodesRemaining
+      backupCodesGeneratedAt
+      allowSupportRecovery
+    }
+  }
+
+### mutation ConfirmMfaTotpChange
+mutation ConfirmMfaTotpChange($code: String!) {
+    confirmMfaTotpChange(code: $code) {
+      enabledAt
+      backupCodesRemaining
+      backupCodesGeneratedAt
+      allowSupportRecovery
+    }
+  }
+
+### mutation ConfirmRegenerateBackupCodes
+mutation ConfirmRegenerateBackupCodes($backupCodes: [String!]!) {
+    confirmRegenerateBackupCodes(backupCodes: $backupCodes)
+  }
+
+### mutation ConnectVcs
+mutation ConnectVcs($project: ID!, $config: VcsInitInfo!) {
+    connectVcs(project: $project, vcs: $config) {
+      ...ProjectVcsFields
+    }
+  }
+
+### mutation ConvertToEditableTextMutation
+mutation ConvertToEditableTextMutation($projectId: ID!, $id: ID!) {
+    convertToEditableText(projectId: $projectId, id: $id) {
+      ...CoreFileFields
+    }
+  }
+
+### mutation CreateCommentMutation
+mutation CreateCommentMutation(
+    $project: ID!
+    $file: ID!
+    $content: String!
+    $from: Bytes!
+    $to: Bytes!
+  ) {
+    createComment(
+      project: $project
+      file: $file
+      content: $content
+      from: $from
+      to: $to
+    ) {
+      ...CoreCommentFields
+    }
+  }
+
+### mutation CreateCommentReplyMutation
+mutation CreateCommentReplyMutation(
+    $project: ID!
+    $comment: ID!
+    $content: String!
+  ) {
+    createCommentReply(
+      project: $project
+      comment: $comment
+      content: $content
+    ) {
+      ...CoreCommentReplyFields
+    }
+  }
+
+### mutation CreateMagicFileMutation
+mutation CreateMagicFileMutation(
+    $project: ID!
+    $name: String!
+    $magic: MagicFileDescriptor!
+  ) {
+    createMagicFile(project: $project, name: $name, magic: $magic) {
+      ...CoreFileFields
+    }
+  }
+
+### mutation CreateProjectMutation
+mutation CreateProjectMutation(
+    $name: String!
+    $owner: ID
+    $files: [NewTypstFile!]
+    $template: TemplateId
+    $vcs: VcsInitInfo
+    $folder: ID
+    $pinnedVersion: String
+  ) {
+    createProject(
+      name: $name
+      owner: $owner
+      files: $files
+      template: $template
+      vcs: $vcs
+      folder: $folder
+      pinnedVersion: $pinnedVersion
+    ) {
+      ...CoreProjectFields
+    }
+  }
+
+### mutation CreateTeamMutation
+mutation CreateTeamMutation($name: String!) {
+    createTeam(name: $name) {
+      ...TeamFields
+    }
+  }
+
+### mutation DeleteCommentMutation
+mutation DeleteCommentMutation($project: ID!, $id: ID!) {
+    deleteComment(project: $project, id: $id)
+  }
+
+### mutation DeleteCommentReplyMutation
+mutation DeleteCommentReplyMutation($project: ID!, $reply: ID!) {
+    deleteCommentReply(project: $project, reply: $reply)
+  }
+
+### mutation DeleteEmailMutation
+mutation DeleteEmailMutation($email: String!) {
+    deleteEmail(email: $email)
+  }
+
+### mutation DeleteFilesMutation
+mutation DeleteFilesMutation($projectId: ID!, $ids: [ID!]!) {
+    deleteFiles(projectId: $projectId, ids: $ids)
+  }
+
+### mutation DeleteOidcProviderMutation
+mutation DeleteOidcProviderMutation($teamId: ID!, $id: ID!) {
+    deleteOidcProvider(teamId: $teamId, id: $id)
+  }
+
+### mutation DeletePackage
+mutation DeletePackage($projectId: ID!, $name: String!, $version: String!) {
+    deletePackage(projectId: $projectId, name: $name, version: $version) {
+      name
+      version
+    }
+  }
+
+### mutation DeletePendingOidcProviderMutation
+mutation DeletePendingOidcProviderMutation($teamId: ID!, $id: ID!) {
+    deletePendingOidcProvider(teamId: $teamId, id: $id)
+  }
+
+### mutation DeleteProjectMember
+mutation DeleteProjectMember($projectId: ID!, $userId: ID!) {
+    deleteProjectMember(projectId: $projectId, userId: $userId)
+  }
+
+### mutation DeleteProjectMutation
+mutation DeleteProjectMutation($id: ID!) {
+    deleteProject(id: $id)
+  }
+
+### mutation DeleteTeamDomainMutation
+mutation DeleteTeamDomainMutation($teamId: ID!, $domain: String!) {
+    deleteTeamDomain(teamId: $teamId, domain: $domain)
+  }
+
+### mutation DeleteUserMutation
+mutation DeleteUserMutation($password: String!) {
+    deleteUser(password: $password)
+  }
+
+### mutation DisableMfa
+mutation DisableMfa($password: String!, $code: String!) {
+    disableMfa(password: $password, code: $code)
+  }
+
+### mutation DisassociateUserFromOidcProvider
+mutation DisassociateUserFromOidcProvider(
+    $teamId: ID!
+    $providerId: ID!
+    $userId: ID!
+    $deleteEmail: Boolean = false
+  ) {
+    disassociateUserFromOidcProvider(
+      teamId: $teamId
+      providerId: $providerId
+      userId: $userId
+      deleteEmail: $deleteEmail
+    )
+  }
+
+### mutation DisconnectOAuth
+mutation DisconnectOAuth($service: OAuthService!) {
+    disconnectOAuth(service: $service)
+  }
+
+### mutation DisconnectVcs
+mutation DisconnectVcs($project: ID!) {
+    disconnectVcs(project: $project)
+  }
+
+### mutation DisenchantFileMutation
+mutation DisenchantFileMutation($project: ID!, $id: ID!) {
+    disenchantFile(project: $project, id: $id) {
+      id
+      magicKind
+    }
+  }
+
+### mutation DuplicateProjectMutation
+mutation DuplicateProjectMutation(
+    $id: ID!
+    $owner: ID
+    $folder: ID
+    $name: String
+  ) {
+    duplicateProject(id: $id, owner: $owner, folder: $folder, name: $name) {
+      ...CoreProjectFields
+    }
+  }
+
+### mutation EditCommentMutation
+mutation EditCommentMutation($project: ID!, $id: ID!, $content: String!) {
+    editComment(project: $project, id: $id, content: $content) {
+      id
+      content
+    }
+  }
+
+### mutation EditCommentReplyMutation
+mutation EditCommentReplyMutation(
+    $project: ID!
+    $reply: ID!
+    $content: String!
+  ) {
+    editCommentReply(project: $project, reply: $reply, content: $content) {
+      id
+      content
+    }
+  }
+
+### mutation EditProject
+mutation EditProject(
+    $projectId: ID!
+    $name: String
+    $previewed: ID
+    $owner: ID
+    $read: Boolean
+    $review: Boolean
+    $write: Boolean
+    $sharedPackages: [String!]
+    $pinnedVersion: String
+    $folder: ID
+    $settings: String
+  ) {
+    updateProject(
+      id: $projectId
+      name: $name
+      previewed: $previewed
+      owner: $owner
+      read: $read
+      review: $review
+      write: $write
+      sharedPackages: $sharedPackages
+      pinnedVersion: $pinnedVersion
+      folder: $folder
+      settings: $settings
+    ) {
+      id
+      name
+      owner {
+        ...CoreAgentFields
+      }
+      modified
+      shareLinkReadOnly
+      shareLinkReviewOnly
+      shareLinkReadWrite
+      sharedPackages {
+        name
+        latestVersion
+        shared
+      }
+      previewed
+      pinnedVersion
+      folder {
+        id
+      }
+      settings
+    }
+  }
+
+### mutation EditProjectMember
+mutation EditProjectMember(
+    $projectId: ID!
+    $userId: ID!
+    $canReview: Boolean
+    $canWrite: Boolean
+  ) {
+    updateProjectMember(
+      projectId: $projectId
+      userId: $userId
+      canReview: $canReview
+      canWrite: $canWrite
+    ) {
+      projectMembers {
+        user {
+          ...CoreAgentFields
+        }
+        canReview
+        canWrite
+      }
+    }
+  }
+
+### mutation EditSettingsMutation
+mutation EditSettingsMutation(
+    $project: ID!
+    $userSettings: String!
+    $projectSettings: String!
+  ) {
+    updateUser(settings: $userSettings) {
+      settings
+    }
+    updateProject(id: $project, settings: $projectSettings) {
+      settings
+    }
+  }
+
+### mutation EditUserMutation
+mutation EditUserMutation(
+    $name: String
+    $telemetryLevel: TelemetryLevel
+    $passwords: PasswordChange
+    $settings: String
+    $emailOptin: Boolean
+    $occupations: [UserOccupation!]
+    $allowNonNativePersonalAccess: Boolean
+  ) {
+    updateUser(
+      name: $name
+      telemetryLevel: $telemetryLevel
+      password: $passwords
+      emailOptin: $emailOptin
+      settings: $settings
+      occupations: $occupations
+      allowNonNativePersonalAccess: $allowNonNativePersonalAccess
+    ) {
+      id
+      name
+      email {
+        id
+        address
+        confirmed
+      }
+      emailOptin
+      telemetryLevel
+      settings
+      occupations
+      allowNonNativePersonalAccess
+    }
+  }
+
+### mutation ForceMagicFileSyncMutation
+mutation ForceMagicFileSyncMutation($project: ID!, $id: ID!) {
+    forceMagicFileSync(project: $project, id: $id) {
+      id
+      lastChange {
+        date
+      }
+    }
+  }
+
+### mutation GetInvoiceUrl
+mutation GetInvoiceUrl($transactionId: ID!) {
+    getInvoiceUrl(transactionId: $transactionId)
+  }
+
+### mutation GetOidcUpgradeUrl
+mutation GetOidcUpgradeUrl(
+    $teamId: ID!
+    $providerId: ID
+    $redirect: String
+    $prompt: OidcPrompt
+  ) {
+    getOidcUpgradeUrl(
+      teamId: $teamId
+      providerId: $providerId
+      redirect: $redirect
+      prompt: $prompt
+    ) {
+      url
+      promptNone
+    }
+  }
+
+### mutation HeadsUpAcknowledgeMutation
+mutation HeadsUpAcknowledgeMutation($id: ID!, $data: String) {
+    acknowledgeHeadsUp(id: $id, data: $data)
+  }
+
+### mutation InviteProjectMember
+mutation InviteProjectMember(
+    $projectId: ID!
+    $email: String!
+    $canReview: Boolean
+    $canWrite: Boolean
+    $alwaysSend: Boolean
+    $sharedPackages: [String!]
+  ) {
+    inviteProjectMember(
+      projectId: $projectId
+      email: $email
+      canReview: $canReview
+      canWrite: $canWrite
+      alwaysSend: $alwaysSend
+    ) {
+      ...ProjectInviteFields
+    }
+    updateProject(id: $projectId, sharedPackages: $sharedPackages) {
+      id
+      sharedPackages {
+        name
+        latestVersion
+        shared
+      }
+    }
+  }
+
+### mutation IssueSubscription
+mutation IssueSubscription($plan: Plan!, $annual: Boolean!) {
+    getSubscribePaddleTransactionId(plan: $plan, annual: $annual)
+  }
+
+### mutation PreviewBillingCycleChange
+mutation PreviewBillingCycleChange($annual: Boolean!) {
+    previewBillingCycleChange(annual: $annual) {
+      current {
+        total
+      }
+      new {
+        total
+        tax {
+          amount
+          rate
+        }
+        creditDelta
+        discount
+      }
+      currencyCode
+    }
+  }
+
+### mutation ProjectInvitationAcceptMutation
+mutation ProjectInvitationAcceptMutation($projectId: ID!) {
+    acceptProjectInvitation(projectId: $projectId) {
+      ...CoreProjectFields
+    }
+  }
+
+### mutation ProjectInvitationDeclineMutation
+mutation ProjectInvitationDeclineMutation($projectId: ID!) {
+    declineProjectInvitation(projectId: $projectId)
+  }
+
+### mutation ProjectJoin
+mutation ProjectJoin($projectId: ID!) {
+    addProjectMember(projectId: $projectId) {
+      user {
+        id
+      }
+    }
+  }
+
+### mutation ProjectRevokeInvitationMutation
+mutation ProjectRevokeInvitationMutation($projectId: ID!, $email: String!) {
+    revokeProjectInvitation(projectId: $projectId, email: $email)
+  }
+
+### mutation PromoteEmailMutation
+mutation PromoteEmailMutation($email: String!) {
+    promoteEmail(email: $email) {
+      ...DetailedEmailFields
+    }
+  }
+
+### mutation PromotePendingOidcProvider
+mutation PromotePendingOidcProvider($teamId: ID!, $id: ID!) {
+    promotePendingOidcProvider(teamId: $teamId, id: $id) {
+      ...OidcProviderFields
+    }
+  }
+
+### mutation PublishPackage
+mutation PublishPackage($projectId: ID!) {
+    publishPackage(projectId: $projectId) {
+      name
+      version
+      created
+    }
+  }
+
+### mutation ReconnectVcs
+mutation ReconnectVcs($project: ID!) {
+    reconnectVcs(project: $project) {
+      remoteName
+      remoteUrl
+      id
+    }
+  }
+
+### mutation RediscoverOidcProvider
+mutation RediscoverOidcProvider($teamId: ID!, $id: ID!) {
+    rediscoverOidcProvider(teamId: $teamId, id: $id) {
+      ...OidcProviderSettingsFields
+    }
+  }
+
+### mutation RegenerateBackupCodes
+mutation RegenerateBackupCodes($password: String!, $code: String!) {
+    regenerateBackupCodes(password: $password, code: $code)
+  }
+
+### mutation ReportProject
+mutation ReportProject(
+    $projectId: ID!
+    $fileId: ID
+    $reporterName: String
+    $reporterEmail: String
+    $reason: ReportReason!
+    $details: String!
+  ) {
+    reportProject(
+      projectId: $projectId
+      fileId: $fileId
+      reporterName: $reporterName
+      reporterEmail: $reporterEmail
+      reason: $reason
+      details: $details
+    )
+  }
+
+### mutation RerollTeamDomainTokenMutation
+mutation RerollTeamDomainTokenMutation($teamId: ID!, $domain: String!) {
+    rerollTeamDomainVerificationToken(teamId: $teamId, domain: $domain) {
+      teamId
+      domain {
+        ...DomainFields
+      }
+      verificationToken
+    }
+  }
+
+### mutation ResolveCommentMutation
+mutation ResolveCommentMutation(
+    $project: ID!
+    $id: ID!
+    $resolved: Boolean!
+  ) {
+    resolveComment(project: $project, id: $id, resolved: $resolved) {
+      id
+      resolved
+    }
+  }
+
+### mutation ResumeSubscription
+mutation ResumeSubscription {
+    resumeSubscription
+  }
+
+### mutation SetPendingOidcProviderClaims
+mutation SetPendingOidcProviderClaims(
+    $teamId: ID!
+    $id: ID!
+    $claims: ClaimsDeclarationInput!
+    $claimsSource: ClaimsSourceInput!
+  ) {
+    setPendingOidcProviderClaims(
+      teamId: $teamId
+      id: $id
+      claims: $claims
+      claimsSource: $claimsSource
+    ) {
+      ...PendingOidcProviderFields
+    }
+  }
+
+### mutation SetPendingOidcProviderCredentials
+mutation SetPendingOidcProviderCredentials(
+    $teamId: ID!
+    $id: ID!
+    $credentials: ClientCredentialsInput!
+  ) {
+    setPendingOidcProviderCredentials(
+      teamId: $teamId
+      id: $id
+      credentials: $credentials
+    ) {
+      ...PendingOidcProviderFields
+    }
+  }
+
+### mutation SetPendingOidcProviderDomains
+mutation SetPendingOidcProviderDomains(
+    $teamId: ID!
+    $id: ID!
+    $domains: [String!]!
+  ) {
+    setPendingOidcProviderDomains(teamId: $teamId, id: $id, domains: $domains) {
+      ...PendingOidcProviderFields
+    }
+  }
+
+### mutation SetUserInfoSource
+mutation SetUserInfoSource($providerId: ID!) {
+    setUserInfoSource(providerId: $providerId) {
+      id
+      name
+      avatar
+      userInfoSource {
+        id
+        name
+        provider {
+          id
+          team {
+            id
+            name
+          }
+        }
+      }
+    }
+  }
+
+### mutation StartOidcTestAuthentication
+mutation StartOidcTestAuthentication($teamId: ID!, $id: ID!) {
+    startOidcTestAuthentication(teamId: $teamId, id: $id) {
+      url
+    }
+  }
+
+### mutation StartPendingOidcProviderManually
+mutation StartPendingOidcProviderManually(
+    $teamId: ID!
+    $id: ID
+    $idp: ManualIdpInput!
+  ) {
+    startPendingOidcProviderManually(teamId: $teamId, id: $id, idp: $idp) {
+      ...PendingOidcProviderFields
+    }
+  }
+
+### mutation StartPendingOidcProviderWithDiscovery
+mutation StartPendingOidcProviderWithDiscovery(
+    $teamId: ID!
+    $id: ID
+    $issuer: String!
+  ) {
+    startPendingOidcProviderWithDiscovery(
+      teamId: $teamId
+      id: $id
+      issuer: $issuer
+    ) {
+      ...PendingOidcProviderFields
+    }
+  }
+
+### mutation SubmitCancellationSurvey
+mutation SubmitCancellationSurvey($reasons: [String!]!, $message: String) {
+    completeCancellationSurvey(reasons: $reasons, message: $message)
+  }
+
+### mutation SubmitFeedback
+mutation SubmitFeedback(
+    $kind: FeedbackKind!
+    $message: String!
+    $severity: FeedbackSeverity
+    $mayUsePersonalData: Boolean
+    $projectId: ID
+    $teamId: ID
+    $fileId: ID
+    $errorMessage: String
+  ) {
+    submitFeedback(
+      kind: $kind
+      message: $message
+      severity: $severity
+      mayUsePersonalData: $mayUsePersonalData
+      projectId: $projectId
+      teamId: $teamId
+      fileId: $fileId
+      errorMessage: $errorMessage
+    )
+  }
+
+### mutation TeamDeleteMutation
+mutation TeamDeleteMutation($id: ID!) {
+    deleteTeam(id: $id)
+  }
+
+### mutation TeamEditMutation
+mutation TeamEditMutation($id: ID!, $name: String) {
+    updateTeam(id: $id, name: $name) {
+      id
+      name
+    }
+  }
+
+### mutation TeamInvitationAcceptMutation
+mutation TeamInvitationAcceptMutation($teamId: ID!) {
+    acceptTeamInvitation(teamId: $teamId) {
+      ...TeamFields
+    }
+  }
+
+### mutation TeamInvitationDeclineMutation
+mutation TeamInvitationDeclineMutation($teamId: ID!) {
+    declineTeamInvitation(teamId: $teamId)
+  }
+
+### mutation TeamMemberDeleteMutation
+mutation TeamMemberDeleteMutation($teamId: ID!, $userId: ID!) {
+    deleteTeamMember(teamId: $teamId, userId: $userId)
+  }
+
+### mutation TeamMemberEditMutation
+mutation TeamMemberEditMutation(
+    $teamId: ID!
+    $userId: ID!
+    $isAdmin: Boolean
+  ) {
+    updateTeamMember(teamId: $teamId, userId: $userId, isAdmin: $isAdmin) {
+      id
+      isAdmin
+    }
+  }
+
+### mutation TeamMemberInviteMutation
+mutation TeamMemberInviteMutation(
+    $teamId: ID!
+    $email: String!
+    $asAdmin: Boolean!
+  ) {
+    inviteTeamMember(teamId: $teamId, email: $email, isAdmin: $asAdmin) {
+      id
+      email
+      asAdmin
+    }
+  }
+
+### mutation TeamResendInvitationMutation
+mutation TeamResendInvitationMutation($teamId: ID!, $email: String!) {
+    resendTeamInvitation(teamId: $teamId, email: $email) {
+      id
+    }
+  }
+
+### mutation TeamRevokeInvitationMutation
+mutation TeamRevokeInvitationMutation($teamId: ID!, $email: String!) {
+    revokeTeamInvitation(teamId: $teamId, email: $email)
+  }
+
+### mutation TryVerifyTeamDomainMutation
+mutation TryVerifyTeamDomainMutation($teamId: ID!, $domain: String!) {
+    tryVerifyTeamDomain(teamId: $teamId, domain: $domain) {
+      ...DomainFields
+    }
+  }
+
+### mutation UndoCancelSubscription
+mutation UndoCancelSubscription {
+    undoSubscriptionCancellation
+  }
+
+### mutation UpdateBillingInfo
+mutation UpdateBillingInfo($billingInfo: BillingInformationInput!) {
+    updateBillingInformation(billingInformation: $billingInfo) {
+      countryCode
+      region
+      postalCode
+      fullName
+      firstLine
+      secondLine
+      city
+      business {
+        name
+        vatId
+      }
+    }
+  }
+
+### mutation UpdateOidcProvider
+mutation UpdateOidcProvider(
+    $teamId: ID!
+    $id: ID!
+    $input: UpdateOidcProviderInput!
+  ) {
+    updateOidcProvider(teamId: $teamId, id: $id, input: $input) {
+      ...OidcProviderSettingsFields
+    }
+  }
+
+### mutation UpdateOidcProviderDomains
+mutation UpdateOidcProviderDomains(
+    $teamId: ID!
+    $id: ID!
+    $domains: [String!]!
+  ) {
+    updateOidcProviderDomains(teamId: $teamId, id: $id, domains: $domains) {
+      ...OidcProviderSettingsFields
+    }
+  }
+
+### mutation UpdateTeamIdpAccessPolicyMutation
+mutation UpdateTeamIdpAccessPolicyMutation(
+    $teamId: ID!
+    $policy: TeamIdpAccessPolicy!
+  ) {
+    updateTeamIdpAccessPolicy(teamId: $teamId, policy: $policy) {
+      id
+      idpAccessPolicy
+    }
+  }
+
+### mutation UpdatesFileMutation
+mutation UpdatesFileMutation($projectId: ID!, $updates: [FileUpdate!]!) {
+    updateFiles(projectId: $projectId, updates: $updates) {
+      id
+      name
+    }
+  }
+
+### mutation VcsPullMutation
+mutation VcsPullMutation(
+    $project: ID!
+    $conflictResolution: [ConflictResolution!]
+  ) {
+    vcsPull(project: $project, conflictResolution: $conflictResolution) {
+      deletedFiles
+      updatedBlobs
+      createdTwice
+    }
+  }
+
+### mutation VcsPushMutation
+mutation VcsPushMutation($project: ID!, $message: String!, $email: String!) {
+    vcsPush(project: $project, message: $message, email: $email)
+  }
+
+### mutation createFolder
+mutation createFolder($name: String!, $parent: ID, $owner: ID) {
+    createFolder(name: $name, parent: $parent, owner: $owner) {
+      ...FolderFields
+    }
+  }
+
+### mutation deleteFolder
+mutation deleteFolder($id: ID!) {
+    deleteFolder(id: $id)
+  }
+
+### mutation updateFolder
+mutation updateFolder($id: ID!, $name: String, $parent: ID, $owner: ID) {
+    updateFolder(id: $id, name: $name, parent: $parent, owner: $owner) {
+      ...FolderFields
+    }
+  }
+
+### query CheckEmailVerification
+query CheckEmailVerification {
+    user {
+      email {
+        confirmed
+      }
+    }
+  }
+
+### query CheckSubscription
+query CheckSubscription {
+    user {
+      id
+      subscriptions {
+        ...CoreSubscriptionFields
+      }
+    }
+    features {
+      ...CoreFeatureFields
+    }
+  }
+
+### query CommentRefresh
+query CommentRefresh($projectId: ID!, $ids: [ID!]!) {
+    project(id: $projectId) {
+      comments(ids: $ids) {
+        ...CoreCommentFields
+      }
+    }
+  }
+
+### query DashboardContent
+query DashboardContent {
+    user {
+      ...DashboardUserFragment
+    }
+  }
+
+### query Features
+query Features {
+    user {
+      id
+      telemetryLevel
+    }
+    features {
+      ...CoreFeatureFields
+    }
+  }
+
+### query FetchVcsDirs
+query FetchVcsDirs($backend: VcsBackend!, $repoPath: String!, $ref: String!) {
+    user {
+      id
+      vcs(backend: $backend) {
+        repositories(path: $repoPath) {
+          refs(name: $ref) {
+            dirs {
+              path
+              empty
+            }
+          }
+        }
+      }
+    }
+  }
+
+### query FetchVcsEmails
+query FetchVcsEmails {
+    user {
+      id
+      vcsEmails
+    }
+  }
+
+### query FetchVcsRefs
+query FetchVcsRefs($backend: VcsBackend!, $repoPath: String!) {
+    user {
+      id
+      vcs(backend: $backend) {
+        repositories(path: $repoPath) {
+          defaultRef
+          refs {
+            name
+          }
+        }
+      }
+    }
+  }
+
+### query FileRefresh
+query FileRefresh($projectId: ID!, $ids: [ID!]!) {
+    project(id: $projectId) {
+      files(ids: $ids) {
+        ...CoreFileFields
+      }
+    }
+  }
+
+### query GetBillingInfo
+query GetBillingInfo {
+    user {
+      billingInformation {
+        countryCode
+        region
+        postalCode
+        fullName
+        firstLine
+        secondLine
+        city
+        business {
+          name
+          vatId
+        }
+      }
+    }
+  }
+
+### query GetCountryCode
+query GetCountryCode {
+    countryCode
+  }
+
+### query NewRevisions
+query NewRevisions($project: ID!) {
+    project(id: $project) {
+      vcs {
+        ...NewRevisionsFragment
+      }
+    }
+  }
+
+### query OidcProviderSettingsQuery
+query OidcProviderSettingsQuery($teamId: ID!, $providerId: ID!) {
+    team(id: $teamId) {
+      id
+      idp(id: $providerId) {
+        ...OidcProviderSettingsFields
+      }
+      idps {
+        id
+        domains {
+          id
+          domain
+        }
+      }
+      domains {
+        id
+        domain
+        verification {
+          active
+          lastVerified
+        }
+      }
+    }
+  }
+
+### query PendingOidcProvidersQuery
+query PendingOidcProvidersQuery($teamId: ID!) {
+    team(id: $teamId) {
+      id
+      pendingOidcProvider {
+        ...PendingOidcProviderFields
+      }
+    }
+  }
+
+### query ProjectFileIds
+query ProjectFileIds($projectIds: [ID!]!) {
+    projectFiles(ids: $projectIds) {
+      id
+      files {
+        id
+        isMultiplayable
+      }
+    }
+  }
+
+### query ProjectFiles
+query ProjectFiles($projectId: ID!) {
+    project(id: $projectId) {
+      ...ProjectFilesFragment
+    }
+    user {
+      ...ProjectUserFragment
+    }
+  }
+
+### query ProjectRefresh
+query ProjectRefresh($projectId: ID!) {
+    project(id: $projectId) {
+      ...ProjectMetaFragment
+    }
+  }
+
+### query ReferenceManagerMeta
+query ReferenceManagerMeta {
+    user {
+      id
+      ...ZoteroUser
+      ...MendeleyUser
+    }
+  }
+
+### query RefreshMendeley
+query RefreshMendeley {
+    user {
+      id
+      ...MendeleyUser
+    }
+  }
+
+### query RefreshVcs
+query RefreshVcs {
+    user {
+      id
+      vcs {
+        id
+        backend
+        userName
+        repositories {
+          id
+          owner
+          name
+        }
+        hasMore
+      }
+    }
+  }
+
+### query RefreshZotero
+query RefreshZotero {
+    user {
+      id
+      ...ZoteroUser
+    }
+  }
+
+### query Subscription
+query Subscription {
+    user {
+      subscriptions {
+        ...CoreSubscriptionFields
+      }
+    }
+  }
+
+### query SubscriptionDetails
+query SubscriptionDetails {
+    user {
+      subscriptions {
+        ...CoreSubscriptionFields
+        ...DetailedSubscriptionFields
+      }
+    }
+  }
+
+### query SubscriptionDetailsWithTransactions
+query SubscriptionDetailsWithTransactions {
+    user {
+      subscriptions {
+        ...CoreSubscriptionFields
+        ...DetailedSubscriptionFields
+      }
+      transactions {
+        ...TransactionsFields
+      }
+    }
+  }
+
+### query TeamMemberQuery
+query TeamMemberQuery($id: ID!) {
+    team(id: $id) {
+      id
+      members {
+        id
+        user {
+          ...CoreAgentFields
+        }
+        isAdmin
+      }
+      pendingInvitations {
+        id
+        email
+        asAdmin
+      }
+      storageUsage {
+        used
+        available
+      }
+      projects {
+        id
+        name
+        vcs {
+          backendUser {
+            id
+          }
+        }
+      }
+      domains {
+        ...DomainFields
+      }
+      idps {
+        ...OidcProviderFields
+      }
+      idpAccessPolicy
+    }
+  }
+
+### query UserForNativeAuthSetup
+query UserForNativeAuthSetup {
+    user {
+      hasPassword
+      emails {
+        id
+        address
+        confirmed
+        sso {
+          id
+        }
+      }
+    }
+  }
+
+### query UserForNativeElevation
+query UserForNativeElevation {
+    user {
+      mfa {
+        enabledAt
+      }
+    }
+  }
+
+### query UserIntegrationsQuery
+query UserIntegrationsQuery {
+    user {
+      id
+      zotero {
+        id
+        userName
+      }
+      mendeley {
+        id
+        userName
+      }
+      vcs {
+        id
+        backend
+        userName
+      }
+    }
+  }
+
+### query UserMfa
+query UserMfa {
+    user {
+      id
+      mfa {
+        enabledAt
+        backupCodesRemaining
+        backupCodesGeneratedAt
+        allowSupportRecovery
+      }
+    }
+  }
+
+### query UserStorageQuery
+query UserStorageQuery {
+    user {
+      id
+      name # Refetch as a team display name might be in cache
+      storageUsage {
+        used
+        available
+      }
+      emails {
+        ...DetailedEmailFields
+      }
+      vcsProjects {
+        id
+        name
+      }
+      occupations
+      hasPassword
+      allowNonNativePersonalAccess
+      userInfoSource {
+        id
+        name
+        provider {
+          id
+          team {
+            id
+            name
+          }
+        }
+      }
+      ssoConnections {
+        id
+        name
+        provider {
+          id
+          team {
+            id
+            name
+          }
+        }
+        associatedEmail
+      }
+    }
+    session {
+      started
+      native
+      sso {
+        id
+        team {
+          id
+          name
+        }
+      }
+    }
+  }

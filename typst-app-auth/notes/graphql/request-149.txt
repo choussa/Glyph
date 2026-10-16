@@ -1,0 +1,7 @@
+# step 12
+== REQUEST ==
+{"operationName":"GetCountryCode","variables":{},"query":"query GetCountryCode {\n  countryCode\n}"}
+
+== RESPONSE ==
+{"data":{"countryCode":null}}
+
