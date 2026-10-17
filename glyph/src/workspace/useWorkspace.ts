@@ -18,6 +18,7 @@
 import { useSyncExternalStore } from 'react';
 import { MAIN_PATH } from '../typst/config';
 import { bytesToBase64 } from './base64';
+import { FileRejected, classifyUpload } from './formats';
 import { dirname, isInside, normalizePath, uniquePath } from './model';
 
 /* ------------------------------------------------------------ engine ops */
@@ -447,11 +448,19 @@ export class Workspace {
     this.notifyContent();
   }
 
-  /** Adopt an uploaded file (binary asset or imported source). */
+  /**
+   * Adopt an uploaded file (binary asset or imported source).
+   *
+   * The acceptance rules live in the format registry, so the UI and the store
+   * agree on what is allowed; this throws {@link FileRejected} for a file the
+   * registry refuses, which keeps the store safe if a caller skips the check.
+   */
   addUpload(dir: string, file: File, data: ArrayBuffer): string {
+    const verdict = classifyUpload(file.name, data.byteLength);
+    if (!verdict.ok) throw new FileRejected(verdict.reason);
+
     const target = uniquePath(`${normalizePath(dir)}/${file.name}`, this.order);
-    const isText = /\.(typ|txt|md|json|toml|yaml|yml|csv|bib|csl)$/i.test(file.name);
-    if (isText) {
+    if (verdict.kind === 'text') {
       const text = new TextDecoder().decode(data);
       this.text.set(target, text);
       this.emit({ type: 'set', path: target, text });

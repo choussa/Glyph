@@ -40,6 +40,7 @@ import { CursorStore } from './editor/cursorStore';
 import { runAction, type ActionName, type SelectionInfo } from './editor/insert';
 import { Workspace, storageKeyFor, useWorkspaceSnapshot } from './workspace/useWorkspace';
 import { basename, normalizePath } from './workspace/model';
+import { classifyUpload } from './workspace/formats';
 import { createZip } from './workspace/zip';
 import { clearSettings, loadSettings, saveSettings, type Settings } from './settings';
 import { downloadBytes, type RenderFormat } from './render/client';
@@ -340,11 +341,21 @@ export function App({ projectId, projectName }: AppProps) {
 
   const handleUpload = useCallback(
     async (dir: string, files: File[]) => {
+      let added = 0;
+      const rejected: string[] = [];
       for (const file of files) {
+        // Check before reading the bytes: a refused file should cost nothing.
+        const verdict = classifyUpload(file.name, file.size);
+        if (!verdict.ok) {
+          rejected.push(`${file.name} — ${verdict.reason}`);
+          continue;
+        }
         const data = await file.arrayBuffer();
         workspace.addUpload(dir, file, data);
+        added += 1;
       }
-      flash(`Uploaded ${files.length} file${files.length === 1 ? '' : 's'}`);
+      if (added > 0) flash(`Uploaded ${added} file${added === 1 ? '' : 's'}`);
+      if (rejected.length > 0) flash(rejected.join(' · '));
     },
     [workspace, flash],
   );

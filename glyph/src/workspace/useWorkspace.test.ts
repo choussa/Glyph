@@ -70,4 +70,24 @@ describe('Workspace.bundle', () => {
     expect(bundle.files['/chapter.typ']).toBe('= Imported');
     expect(bundle.assets['/chapter.typ']).toBeUndefined();
   });
+
+  it('refuses a forbidden upload and leaves the project untouched', () => {
+    const workspace = new Workspace();
+    workspace.init('x');
+    const before = workspace.getSnapshot().paths;
+
+    expect(() =>
+      workspace.addUpload('/', new File([], 'installer.exe'), new ArrayBuffer(4)),
+    ).toThrowError(/not allowed/);
+    expect(workspace.getSnapshot().paths).toEqual(before);
+    expect(workspace.has('/installer.exe')).toBe(false);
+  });
+
+  it('refuses an unsupported extension', () => {
+    const workspace = new Workspace();
+    workspace.init('x');
+    expect(() =>
+      workspace.addUpload('/', new File([], 'theme.css'), new ArrayBuffer(4)),
+    ).toThrowError(/not supported/);
+  });
 });
