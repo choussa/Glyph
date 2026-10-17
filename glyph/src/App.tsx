@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
+import { redo, undo } from '@codemirror/commands';
 import {
   TypstProject,
   type CompileResult,
@@ -77,6 +78,16 @@ function initials(name: string): string {
     .join('');
 }
 
+/** A new project starts with a page, not with the demo manuscript. */
+const BLANK_DOC = `#set page(paper: "a4", margin: 2.4cm)
+#set text(font: "Libertinus Serif", size: 11pt)
+#set par(justify: true)
+
+= Untitled document
+
+Start writing. Everything here compiles as you type.
+`;
+
 export interface AppProps {
   projectId: string;
   projectName: string;
@@ -88,7 +99,7 @@ export function App({ projectId, projectName }: AppProps) {
   const workspaceRef = useRef<Workspace | null>(null);
   if (!workspaceRef.current) {
     const created = new Workspace(storageKeyFor(projectId));
-    created.init(sampleDoc);
+    created.init(projectId === 'attention' ? sampleDoc : BLANK_DOC);
     workspaceRef.current = created;
   }
   const workspace = workspaceRef.current;
@@ -421,11 +432,22 @@ export function App({ projectId, projectName }: AppProps) {
   const bundle = useCallback(() => workspace.bundle(), [workspace]);
 
   const exportBrowser = useCallback(async () => {
-    const bytes = await project?.exportPdf();
-    if (!bytes) return;
-    const stem = basename(workspace.getSnapshot().entry).replace(/\.[^.]+$/, '');
-    downloadBytes(bytes, `${stem || 'document'}.pdf`, 'application/pdf');
-    flash(`browser pdf · ${(bytes.length / 1024).toFixed(0)} KB`);
+    if (!project) {
+      flash('The engine is still starting');
+      return;
+    }
+    try {
+      const bytes = await project.exportPdf();
+      if (!bytes || bytes.length === 0) {
+        flash('Browser PDF produced nothing — check the Issues panel');
+        return;
+      }
+      const stem = basename(workspace.getSnapshot().entry).replace(/\.[^.]+$/, '');
+      downloadBytes(bytes, `${stem || 'document'}.pdf`, 'application/pdf');
+      flash(`browser pdf · ${(bytes.length / 1024).toFixed(0)} KB`);
+    } catch (error) {
+      flash(`browser pdf failed · ${(error as Error).message}`);
+    }
   }, [project, workspace, flash]);
 
   const exportOnServer = useCallback(
@@ -809,12 +831,16 @@ export function App({ projectId, projectName }: AppProps) {
           onSharePreview={() => setServerPreview(Date.now())}
           onResetWorkspace={handleResetWorkspace}
           onUndo={() => {
-            viewRef.current?.focus();
-            document.execCommand?.('undo');
+            const view = viewRef.current;
+            if (!view) return;
+            view.focus();
+            undo(view);
           }}
           onRedo={() => {
-            viewRef.current?.focus();
-            document.execCommand?.('redo');
+            const view = viewRef.current;
+            if (!view) return;
+            view.focus();
+            redo(view);
           }}
           onFormat={() => void handleFormat()}
           onFind={() => openPanel('search')}

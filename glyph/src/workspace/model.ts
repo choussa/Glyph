@@ -10,8 +10,8 @@
 
 /** `/a//b.typ`, `./a/b.typ` and `a/b.typ` all normalise to `/a/b.typ`. */
 export function normalizePath(path: string): string {
-  const clean = path.replace(/^\/*/, '').replace(/\/+/g, '/').replace(/\/+$/, '');
-  return `/${clean}`;
+  const segments = path.split('/').filter((segment) => segment !== '' && segment !== '.');
+  return `/${segments.join('/')}`;
 }
 
 /** The final segment of a path. `/a/b.typ` -> `b.typ`. */

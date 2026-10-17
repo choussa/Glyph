@@ -19,12 +19,12 @@
  */
 import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { createRequire } from 'node:module';
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ByteLruCache } from './cache.ts';
 import { FONTS_DIR, config } from './config.ts';
 import { countErrors, type Diagnostic } from './diagnostics.ts';
+import { ENGINE, INSTALLED_TYPST_TS } from './engine.ts';
 import { HttpError, applyCors, log, readJson, sendBytes, sendJson } from './http.ts';
 import { SourceError, validateBundlePaths } from './paths.ts';
 import { PoolError, RenderPool } from './pool.ts';
@@ -39,11 +39,8 @@ import {
   type SourceBundle,
 } from './types.ts';
 
-const require = createRequire(import.meta.url);
-const ENGINE_VERSION = (
-  require('@myriaddreamin/typst-ts-node-compiler/package.json') as { version: string }
-).version;
-
+/** The installed native compiler version — the manifest's `typstTs`. */
+const ENGINE_VERSION = INSTALLED_TYPST_TS;
 const startedAt = Date.now();
 const pool = new RenderPool(config.workers);
 const cache = new ByteLruCache<RenderOutcome>(config.cacheBytes, config.cacheEntries);
@@ -182,7 +179,12 @@ async function handleHealth(response: ServerResponse): Promise<void> {
   sendJson(response, 200, {
     ok: true,
     service: 'glyph-render',
-    engine: { package: '@myriaddreamin/typst-ts-node-compiler', version: ENGINE_VERSION },
+    engine: {
+      package: ENGINE.package,
+      version: ENGINE_VERSION,
+      /** The Typst language version both engines are pinned to. */
+      typst: ENGINE.typst,
+    },
     uptimeMs: Date.now() - startedAt,
     pool: pool.stats(),
     cache: cache.stats(),

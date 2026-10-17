@@ -2353,6 +2353,11 @@ code {
   border-color: var(--err);
 }
 
+.chip-warn {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
 .overlay-body {
   position: absolute;
   inset: 0;
@@ -2394,6 +2399,64 @@ code {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   white-space: pre-wrap;
+}
+
+.overlay-diagnostics {
+  list-style: none;
+  margin: 0;
+  max-height: 40%;
+  overflow: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-inset);
+}
+
+.overlay-diagnostic {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 14px;
+  font-size: 12px;
+  border-left: 3px solid transparent;
+}
+
+.overlay-diagnostic.diag-error {
+  border-left-color: var(--err);
+}
+
+.overlay-diagnostic.diag-warning {
+  border-left-color: var(--warn);
+}
+
+.overlay-diagnostic + .overlay-diagnostic {
+  border-top: 1px solid var(--border);
+}
+
+.diag-severity {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.diag-error .diag-severity {
+  color: var(--err);
+}
+
+.diag-warning .diag-severity {
+  color: var(--warn);
+}
+
+.diag-message {
+  color: var(--text);
+}
+
+.diag-file,
+.diag-hint {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 /* ---------------------------------------------------- 15. command palette */

@@ -105,6 +105,8 @@ export function ServerPreview({ client, bundle, revision, onClose }: ServerPrevi
             <>
               <span className="chip chip-accent">{state.result.ms.toFixed(1)} ms</span>
               <span className="chip">{state.result.count} pages</span>
+              {errors > 0 && <span className="chip chip-err">{errors} error{errors === 1 ? '' : 's'}</span>}
+              {warnings > 0 && <span className="chip chip-warn">{warnings} warning{warnings === 1 ? '' : 's'}</span>}
             </>
           )}
           {state.error && <span className="chip chip-err">{state.error}</span>}
@@ -125,7 +127,31 @@ export function ServerPreview({ client, bundle, revision, onClose }: ServerPrevi
             <p>Rendering on the server…</p>
           </div>
         ) : (
-          <div className="preview-scroller server-preview-scroller" ref={scrollerRef} />
+          <>
+            {diagnostics.length > 0 && (
+              <ul className="overlay-diagnostics" aria-label="Server diagnostics">
+                {diagnostics.map((diag, index) => (
+                  <li key={index} className={`overlay-diagnostic diag-${diag.severity}`}>
+                    <span className="diag-severity">{diag.severity}</span>
+                    <span className="diag-message">{diag.message}</span>
+                    {diag.file && <span className="diag-file">{diag.file}</span>}
+                    {diag.hints.map((hint, hintIndex) => (
+                      <span key={hintIndex} className="diag-hint">
+                        {hint}
+                      </span>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {pages.length === 0 ? (
+              <div className="overlay-message">
+                <p>{diagnostics.length > 0 ? 'The server produced no pages.' : 'This document produced no pages.'}</p>
+              </div>
+            ) : (
+              <div className="preview-scroller server-preview-scroller" ref={scrollerRef} />
+            )}
+          </>
         )}
       </div>
     </div>

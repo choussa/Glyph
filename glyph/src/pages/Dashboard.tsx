@@ -29,17 +29,19 @@ function initials(name: string): string {
 function ProjectRow({ project }: { project: Project }) {
   return (
     <Link to={`/project/${project.id}`} className="project-row">
-      <span className={`doc-thumb doc-thumb-${project.template}`} aria-hidden="true">
-        <span className="doc-thumb-title">{project.excerpt[0]}</span>
-        <span className="doc-thumb-line">{project.excerpt[1]}</span>
-        <span className="doc-thumb-line doc-thumb-short">{project.excerpt[2]}</span>
-        <span className="doc-thumb-rule" />
-        <span className="doc-thumb-line" />
-        <span className="doc-thumb-line doc-thumb-short" />
-      </span>
-      <span className="project-name">
-        <strong>{project.title}</strong>
-        <span>{project.template} · local project</span>
+      <span className="project-lead">
+        <span className={`doc-thumb doc-thumb-${project.template}`} aria-hidden="true">
+          <span className="doc-thumb-title">{project.excerpt[0]}</span>
+          <span className="doc-thumb-rule" />
+          <span className="doc-thumb-line" />
+          <span className="doc-thumb-line doc-thumb-short" />
+          <span className="doc-thumb-line" />
+          <span className="doc-thumb-line doc-thumb-short" />
+        </span>
+        <span className="doc-name">
+          <strong>{project.title}</strong>
+          <span>{project.template} · local project</span>
+        </span>
       </span>
       <span className="project-cell project-edited">{project.edited}</span>
       <span className="project-cell project-pages">{project.pages} pp</span>
