@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { extractOutline } from '../workspace/model';
 import { RenderClient, type PagesReport, type SourceBundle } from './client';
 
 interface ServerPreviewProps {
@@ -14,6 +15,13 @@ interface State {
   result: PagesReport | null;
   error: string | null;
 }
+
+/** Creating a link is a separate, explicit action from rendering the preview. */
+type ShareState =
+  | { status: 'idle' }
+  | { status: 'creating' }
+  | { status: 'ready'; url: string }
+  | { status: 'error'; message: string };
 
 /** The number of diagnostics of a given severity, or 0. */
 function countSeverity(report: PagesReport | null, severity: 'error' | 'warning'): number {
@@ -34,6 +42,38 @@ export function ServerPreview({ client, bundle, revision, onClose }: ServerPrevi
   const scrollerRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef(bundle);
   bundleRef.current = bundle;
+
+  const [share, setShare] = useState<ShareState>({ status: 'idle' });
+  const [copied, setCopied] = useState(false);
+
+  /**
+   * Publish the bundle and show the read-only URL.
+   *
+   * The first heading is the closest thing a project has to a title; a document
+   * without one is still shareable and falls back to a neutral name.
+   */
+  const createShareLink = useCallback(async () => {
+    setShare({ status: 'creating' });
+    try {
+      const files = bundleRef.current.files;
+      const entry = bundleRef.current.entry ?? '/main.typ';
+      const title = extractOutline(files[entry] ?? '')[0]?.title ?? 'Shared document';
+      const created = await client.createShare(bundleRef.current, title);
+      setShare({ status: 'ready', url: created.url });
+    } catch (error) {
+      setShare({ status: 'error', message: (error as Error).message });
+    }
+  }, [client]);
+
+  const copyLink = useCallback(async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard access can be denied; the field is still selectable.
+    }
+  }, []);
 
   const load = useCallback(
     async (signal: AbortSignal) => {
@@ -110,6 +150,29 @@ export function ServerPreview({ client, bundle, revision, onClose }: ServerPrevi
             </>
           )}
           {state.error && <span className="chip chip-err">{state.error}</span>}
+          {share.status === 'ready' ? (
+            <div className="share-link">
+              <input
+                readOnly
+                value={share.url}
+                aria-label="Read-only share link"
+                onFocus={(event) => event.currentTarget.select()}
+              />
+              <button onClick={() => void copyLink(share.url)}>
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          ) : (
+            <button
+              className="btn btn-share"
+              onClick={() => void createShareLink()}
+              disabled={share.status === 'creating'}
+              title="Publish a read-only link to these pages"
+            >
+              {share.status === 'creating' ? 'Creating…' : 'Create link'}
+            </button>
+          )}
+          {share.status === 'error' && <span className="chip chip-err">{share.message}</span>}
         </div>
         <button onClick={onClose} title="Close (Esc)">
           Close

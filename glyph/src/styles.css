@@ -2480,6 +2480,29 @@ code {
   line-height: 1.5;
 }
 
+/* The link field lives in the server-preview overlay bar. */
+.share-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.share-link input {
+  width: min(320px, 30vw);
+  padding: 4px 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.share-link button {
+  white-space: nowrap;
+}
+
 .overlay-message {
   height: 100%;
   display: flex;

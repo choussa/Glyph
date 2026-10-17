@@ -416,6 +416,30 @@ test('the HTTP server boots and serves every route', async (t) => {
   ).json()) as { count: number };
   assert.equal(sharePages.count, 2);
 
+  // A share must carry binary assets too, not only sources: this is the path
+  // that silently lost images in the editor before `bundle()` was fixed.
+  const withImage = await fetch(`${base}/shares`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      title: 'With image',
+      files: { '/main.typ': '#image("logo.png", width: 10pt)\n' },
+      assets: {
+        '/logo.png':
+          'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR4nGP4z8DwHwwZGP7//w9kAABHygj4/BTyWgAAAABJRU5ErkJggg==',
+      },
+    }),
+  });
+  assert.equal(withImage.status, 201);
+  const imageShare = (await withImage.json()) as { token: string; assets: number };
+  assert.equal(imageShare.assets, 1);
+  const imagePages = (await (
+    await fetch(`${base}/shares/${imageShare.token}/pages`)
+  ).json()) as { count: number; pages: { svg: string }[] };
+  assert.equal(imagePages.count, 1);
+  assert.match(imagePages.pages[0]!.svg, /<image\b/);
+  assert.equal((await fetch(`${base}/shares/${imageShare.token}`, { method: 'DELETE' })).status, 204);
+
   const sharePdf = await fetch(`${base}/shares/${share.token}/pdf`);
   assert.equal(sharePdf.status, 200);
   assert.match(sharePdf.headers.get('content-type') ?? '', /application\/pdf/);
