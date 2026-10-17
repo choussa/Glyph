@@ -28,6 +28,7 @@ import { ENGINE, INSTALLED_TYPST_TS } from './engine.ts';
 import { HttpError, applyCors, log, readJson, sendBytes, sendJson } from './http.ts';
 import { SourceError, validateBundlePaths } from './paths.ts';
 import { PoolError, RenderPool } from './pool.ts';
+import { ShareNotFound, ShareStore } from './share.ts';
 import {
   FORMAT_CONTENT_TYPE,
   RENDER_FORMATS,
@@ -45,6 +46,7 @@ const startedAt = Date.now();
 const pool = new RenderPool(config.workers);
 const cache = new ByteLruCache<RenderOutcome>(config.cacheBytes, config.cacheEntries);
 const inFlight = new Map<string, Promise<RenderOutcome>>();
+const shares = new ShareStore(config.sharesDir, config.appUrl);
 
 let served = 0;
 let cacheHits = 0;
@@ -144,6 +146,28 @@ function outcomeHeaders(outcome: RenderOutcome, source: 'hit' | 'miss' | 'coales
   };
 }
 
+/** The `pages` payload, shared by `/v1/render` and the read-only share route. */
+function sendPages(
+  response: ServerResponse,
+  outcome: RenderOutcome,
+  headers: Record<string, string>,
+): void {
+  const pages = outcome.artifact as PagesArtifact;
+  sendJson(
+    response,
+    200,
+    {
+      width: pages.width,
+      height: pages.height,
+      count: pages.pages.length,
+      pages: pages.pages,
+      diagnostics: outcome.diagnostics,
+      ms: outcome.ms,
+    },
+    headers,
+  );
+}
+
 /** Run a render, reusing cached bytes or an identical in-flight compile. */
 async function render(
   request: RenderRequest,
@@ -229,24 +253,70 @@ async function handleRender(
 
   const artifact = outcome.artifact;
   if (format === 'pages') {
-    const pages = artifact as PagesArtifact;
-    sendJson(
-      response,
-      200,
-      {
-        width: pages.width,
-        height: pages.height,
-        count: pages.pages.length,
-        pages: pages.pages,
-        diagnostics: outcome.diagnostics,
-        ms: outcome.ms,
-      },
-      headers,
-    );
+    sendPages(response, outcome, headers);
     return;
   }
 
   sendBytes(response, 200, artifact as Uint8Array | string, FORMAT_CONTENT_TYPE[format], headers);
+}
+
+/* ------------------------------------------------------------------- shares */
+
+/**
+ * Persist a project and return a read-only token.
+ *
+ * The body is the same `SourceBundle` shape as `/v1/render`, so a client can
+ * share exactly what it is previewing without a second serialisation.
+ */
+async function handleShareCreate(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  const body = await readJson(request);
+  const bundle = readBundle(body);
+  const title = typeof body.title === 'string' ? body.title : undefined;
+  const record = await shares.create({ title, bundle });
+  sendJson(response, 201, shares.summary(record), {
+    Location: `/v1/shares/${record.token}`,
+  });
+}
+
+async function handleShareSummary(response: ServerResponse, token: string): Promise<void> {
+  const record = await shares.get(token);
+  sendJson(response, 200, shares.summary(record));
+}
+
+async function handleShareRender(
+  token: string,
+  response: ServerResponse,
+  format: 'pages' | 'pdf',
+): Promise<void> {
+  const record = await shares.get(token);
+  const { outcome, source } = await render({ ...record.bundle, format });
+  const headers = outcomeHeaders(outcome, source);
+  served++;
+
+  if (outcome.artifact === null) {
+    sendJson(response, 422, { error: 'compile_failed', diagnostics: outcome.diagnostics }, headers);
+    return;
+  }
+
+  if (format === 'pages') {
+    sendPages(response, outcome, headers);
+    return;
+  }
+
+  sendBytes(response, 200, outcome.artifact as Uint8Array, FORMAT_CONTENT_TYPE.pdf, {
+    ...headers,
+    'Content-Disposition': `inline; filename="${shares.pdfFilename(record)}"`,
+  });
+}
+
+async function handleShareDelete(response: ServerResponse, token: string): Promise<void> {
+  const removed = await shares.remove(token);
+  if (!removed) throw new HttpError(404, `share ${token} not found`, 'share_not_found');
+  response.writeHead(204);
+  response.end();
 }
 
 async function handleQuery(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -285,6 +355,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
         'GET /v1/fonts': 'fonts the engine will resolve',
         'POST /v1/render': 'compile and export (pdf | svg | pages | html | vector)',
         'POST /v1/query': 'introspection queries (e.g. selector=heading)',
+        'POST /v1/shares': 'persist a bundle, return a read-only token',
+        'GET /v1/shares/:token': 'share metadata (never sources)',
+        'GET /v1/shares/:token/pages': 'rendered pages for a share',
+        'GET /v1/shares/:token/pdf': 'rendered PDF for a share',
+        'DELETE /v1/shares/:token': 'revoke a share',
       },
     });
     return;
@@ -293,6 +368,24 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   if (request.method === 'GET' && path === '/v1/fonts') return handleFonts(response);
   if (request.method === 'POST' && path === '/v1/render') return handleRender(request, response, url);
   if (request.method === 'POST' && path === '/v1/query') return handleQuery(request, response);
+
+  if (path === '/v1/shares') {
+    if (request.method === 'POST') return handleShareCreate(request, response);
+    throw new HttpError(405, 'use POST /v1/shares', 'method_not_allowed');
+  }
+
+  const share = /^\/v1\/shares\/([^/]+)(?:\/(pages|pdf))?$/.exec(path);
+  if (share !== null) {
+    const token = share[1]!;
+    const artifact = share[2];
+    if (artifact === undefined) {
+      if (request.method === 'GET') return handleShareSummary(response, token);
+      if (request.method === 'DELETE') return handleShareDelete(response, token);
+    } else if (request.method === 'GET') {
+      return handleShareRender(token, response, artifact as 'pages' | 'pdf');
+    }
+    throw new HttpError(405, `unsupported method for ${path}`, 'method_not_allowed');
+  }
 
   throw new HttpError(404, `no route for ${request.method} ${path}`, 'not_found');
 }
@@ -313,6 +406,10 @@ const server = createServer((request, response) => {
       }
       if (error instanceof SourceError) {
         sendJson(response, 400, { error: 'bad_source', message: error.message });
+        return;
+      }
+      if (error instanceof ShareNotFound) {
+        sendJson(response, 404, { error: 'share_not_found', message: error.message });
         return;
       }
       if (error instanceof PoolError) {

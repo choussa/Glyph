@@ -7,6 +7,9 @@
  * Run: `node --test test/`
  */
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { ByteLruCache } from '../src/cache.ts';
 import { normalizeDiagnostics, splitHints } from '../src/diagnostics.ts';
@@ -291,9 +294,17 @@ test('queries the outline', () => {
 test('the HTTP server boots and serves every route', async (t) => {
   const { spawn } = await import('node:child_process');
   const port = 8791;
+  const sharesDir = await mkdtemp(join(tmpdir(), 'glyph-http-shares-'));
+  t.after(() => rm(sharesDir, { recursive: true, force: true }));
   const server = spawn(process.execPath, ['src/index.ts'], {
     cwd: new URL('..', import.meta.url).pathname,
-    env: { ...process.env, PORT: String(port), GLYPH_RENDER_WORKERS: '1', GLYPH_LOG: 'silent' },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      GLYPH_RENDER_WORKERS: '1',
+      GLYPH_LOG: 'silent',
+      GLYPH_SHARES_DIR: sharesDir,
+    },
     stdio: 'ignore',
   });
   t.after(() => server.kill('SIGKILL'));
@@ -366,6 +377,61 @@ test('the HTTP server boots and serves every route', async (t) => {
     })
   ).json()) as { result: unknown };
   assert.deepEqual(outline.result, [1, 1]);
+
+  /* ---------------------------------------------------------- share links */
+
+  const noFiles = await fetch(`${base}/shares`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ title: 'x' }),
+  });
+  assert.equal(noFiles.status, 400);
+
+  const created = await fetch(`${base}/shares`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ title: 'Shared paper', files: { '/main.typ': DOC } }),
+  });
+  assert.equal(created.status, 201);
+  const share = (await created.json()) as {
+    token: string;
+    url: string;
+    entry: string;
+    files: number;
+  };
+  assert.match(share.token, /^[A-Za-z0-9_-]{22}$/);
+  assert.equal(share.entry, '/main.typ');
+  assert.equal(share.files, 1);
+  assert.equal(share.url.endsWith(`/project/${share.token}`), true);
+  // The public projection must never carry source text.
+  assert.equal(JSON.stringify(share).includes('#set page'), false);
+
+  const summary = (await (await fetch(`${base}/shares/${share.token}`)).json()) as {
+    title: string;
+  };
+  assert.equal(summary.title, 'Shared paper');
+
+  const sharePages = (await (
+    await fetch(`${base}/shares/${share.token}/pages`)
+  ).json()) as { count: number };
+  assert.equal(sharePages.count, 2);
+
+  const sharePdf = await fetch(`${base}/shares/${share.token}/pdf`);
+  assert.equal(sharePdf.status, 200);
+  assert.match(sharePdf.headers.get('content-type') ?? '', /application\/pdf/);
+  assert.match(
+    sharePdf.headers.get('content-disposition') ?? '',
+    /inline; filename="Shared-paper\.pdf"/,
+  );
+  assert.ok((await sharePdf.arrayBuffer()).byteLength > 1000);
+
+  const missing = await fetch(`${base}/shares/notatoken`);
+  assert.equal(missing.status, 404);
+  assert.equal(((await missing.json()) as { error: string }).error, 'share_not_found');
+
+  const revoked = await fetch(`${base}/shares/${share.token}`, { method: 'DELETE' });
+  assert.equal(revoked.status, 204);
+  assert.equal((await fetch(`${base}/shares/${share.token}`)).status, 404);
 });
 
 after(() => {

@@ -56,6 +56,16 @@ export const config = {
 
   cors: process.env.GLYPH_CORS ?? '*',
   logLevel: (process.env.GLYPH_LOG ?? 'info') as 'silent' | 'info' | 'debug',
+
+  /**
+   * Share links persist one JSON file per token. A leaf directory is enough for
+   * this build and keeps the service dependency-free; move it to object storage
+   * when shares outgrow a disk.
+   */
+  sharesDir: process.env.GLYPH_SHARES_DIR ?? join(SERVER_ROOT, '.data', 'shares'),
+
+  /** Origin used to build the canonical read-only share URL. */
+  appUrl: process.env.GLYPH_APP_URL ?? 'http://localhost:5173',
 };
 
 export type Config = typeof config;
