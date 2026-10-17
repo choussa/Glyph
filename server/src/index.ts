@@ -28,6 +28,7 @@ import { ENGINE, INSTALLED_TYPST_TS } from './engine.ts';
 import { HttpError, applyCors, log, readJson, sendBytes, sendJson } from './http.ts';
 import { SourceError, validateBundlePaths } from './paths.ts';
 import { PoolError, RenderPool } from './pool.ts';
+import { ProjectInvalid, ProjectNotFound, ProjectStore } from './project.ts';
 import { ShareNotFound, ShareStore } from './share.ts';
 import {
   FORMAT_CONTENT_TYPE,
@@ -47,6 +48,7 @@ const pool = new RenderPool(config.workers);
 const cache = new ByteLruCache<RenderOutcome>(config.cacheBytes, config.cacheEntries);
 const inFlight = new Map<string, Promise<RenderOutcome>>();
 const shares = new ShareStore(config.sharesDir, config.appUrl);
+const projects = new ProjectStore(config.projectsDir);
 
 let served = 0;
 let cacheHits = 0;
@@ -319,6 +321,90 @@ async function handleShareDelete(response: ServerResponse, token: string): Promi
   response.end();
 }
 
+/* ----------------------------------------------------------------- projects */
+
+/** The editable fields shared by create and update. */
+interface ProjectFields {
+  name?: string;
+  previewed?: string | null;
+  settings?: string | null;
+}
+
+/**
+ * Read `name`, `previewed`, and `settings` from a body.
+ *
+ * Types are checked here so the store only ever sees a string or null; the
+ * *semantics* (a valid slug-free name, a `previewed` that exists in the bundle,
+ * a JSON settings object) belong to the store and surface as 400.
+ */
+function readProjectFields(body: Record<string, unknown>): ProjectFields {
+  const fields: ProjectFields = {};
+  if (body.name !== undefined) {
+    if (typeof body.name !== 'string') {
+      throw new HttpError(400, '"name" must be a string', 'bad_field');
+    }
+    fields.name = body.name;
+  }
+  if (body.previewed !== undefined) {
+    if (body.previewed !== null && typeof body.previewed !== 'string') {
+      throw new HttpError(400, '"previewed" must be a file path or null', 'bad_field');
+    }
+    fields.previewed = body.previewed;
+  }
+  if (body.settings !== undefined) {
+    if (body.settings !== null && typeof body.settings !== 'string') {
+      throw new HttpError(400, '"settings" must be a JSON string or null', 'bad_field');
+    }
+    fields.settings = body.settings;
+  }
+  return fields;
+}
+
+async function handleProjectCreate(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  const body = await readJson(request);
+  const bundle = readBundle(body);
+  const record = await projects.create({ ...readProjectFields(body), bundle });
+  sendJson(response, 201, projects.summary(record), { Location: `/v1/projects/${record.id}` });
+}
+
+async function handleProjectList(response: ServerResponse): Promise<void> {
+  sendJson(response, 200, { projects: await projects.list() });
+}
+
+async function handleProjectGet(response: ServerResponse, id: string): Promise<void> {
+  sendJson(response, 200, await projects.get(id));
+}
+
+async function handleProjectUpdate(
+  request: IncomingMessage,
+  response: ServerResponse,
+  id: string,
+): Promise<void> {
+  const body = await readJson(request);
+  // `files` is optional on update: renaming a project should not require
+  // resending its sources.
+  const bundle = body.files === undefined ? undefined : readBundle(body);
+  const record = await projects.update(id, { ...readProjectFields(body), bundle });
+  sendJson(response, 200, projects.summary(record));
+}
+
+async function handleProjectDelete(response: ServerResponse, id: string): Promise<void> {
+  const removed = await projects.remove(id);
+  if (!removed) throw new ProjectNotFound(id);
+  response.writeHead(204);
+  response.end();
+}
+
+/** Publish a project's current bundle as a read-only share. */
+async function handleProjectShare(response: ServerResponse, id: string): Promise<void> {
+  const project = await projects.get(id);
+  const record = await shares.create({ title: project.name, bundle: project.bundle });
+  sendJson(response, 201, shares.summary(record), { Location: `/v1/shares/${record.token}` });
+}
+
 async function handleQuery(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const body = await readJson(request);
   const bundle = readBundle(body);
@@ -360,6 +446,12 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
         'GET /v1/shares/:token/pages': 'rendered pages for a share',
         'GET /v1/shares/:token/pdf': 'rendered PDF for a share',
         'DELETE /v1/shares/:token': 'revoke a share',
+        'GET /v1/projects': 'list project summaries',
+        'POST /v1/projects': 'create a project from a bundle',
+        'GET /v1/projects/:id': 'the full project, sources included',
+        'PUT /v1/projects/:id': 'rename, re-point `previewed`, or replace sources',
+        'DELETE /v1/projects/:id': 'delete a project',
+        'POST /v1/projects/:id/shares': 'publish a project as a read-only share',
       },
     });
     return;
@@ -387,6 +479,25 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     throw new HttpError(405, `unsupported method for ${path}`, 'method_not_allowed');
   }
 
+  if (path === '/v1/projects') {
+    if (request.method === 'GET') return handleProjectList(response);
+    if (request.method === 'POST') return handleProjectCreate(request, response);
+    throw new HttpError(405, 'use GET or POST /v1/projects', 'method_not_allowed');
+  }
+
+  const project = /^\/v1\/projects\/([^/]+)(?:\/(shares))?$/.exec(path);
+  if (project !== null) {
+    const id = project[1]!;
+    if (project[2] === 'shares') {
+      if (request.method === 'POST') return handleProjectShare(response, id);
+      throw new HttpError(405, `unsupported method for ${path}`, 'method_not_allowed');
+    }
+    if (request.method === 'GET') return handleProjectGet(response, id);
+    if (request.method === 'PUT') return handleProjectUpdate(request, response, id);
+    if (request.method === 'DELETE') return handleProjectDelete(response, id);
+    throw new HttpError(405, `unsupported method for ${path}`, 'method_not_allowed');
+  }
+
   throw new HttpError(404, `no route for ${request.method} ${path}`, 'not_found');
 }
 
@@ -410,6 +521,18 @@ const server = createServer((request, response) => {
       }
       if (error instanceof ShareNotFound) {
         sendJson(response, 404, { error: 'share_not_found', message: error.message });
+        return;
+      }
+      if (error instanceof ProjectNotFound) {
+        sendJson(response, 404, { error: 'project_not_found', message: error.message });
+        return;
+      }
+      if (error instanceof ProjectInvalid) {
+        sendJson(response, 400, {
+          error: 'invalid_project',
+          field: error.field,
+          message: error.message,
+        });
         return;
       }
       if (error instanceof PoolError) {

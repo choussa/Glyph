@@ -29,7 +29,7 @@ No build step: Node ≥ 22.18 runs the TypeScript directly via type stripping, a
 the compiler is a prebuilt native addon.
 
 ```bash
-npm test               # 36 tests: engine, cache, paths, SVG splitting, shares, HTTP
+npm test               # 48 tests: engine, cache, paths, SVG splitting, shares, projects, HTTP
 npm run typecheck      # tsc --noEmit
 npm run bench          # measured latency + throughput
 ```
@@ -158,6 +158,28 @@ alphabet before touching the filesystem, so a crafted token cannot escape the
 store directory. One JSON file per token lives under `GLYPH_SHARES_DIR` and is
 written atomically (temp file + rename).
 
+### Projects
+
+A project is a source bundle plus the reference app's editable fields — `name`,
+`previewed` (the file the preview shows), and `settings` (a JSON object string),
+matching its `EditProject` contract. Ids are readable slugs with a random suffix
+(`on-attention-3f9a01`); a project id is a name in a URL, while a share token is
+the thing that must be unguessable.
+
+| Route | What it does |
+| --- | --- |
+| `GET /v1/projects` | summaries (no sources), most recently updated first |
+| `POST /v1/projects` | create from a bundle; body also takes `name`, `previewed`, `settings` |
+| `GET /v1/projects/:id` | the full record, sources included |
+| `PUT /v1/projects/:id` | change any of `name`/`previewed`/`settings`/`files`; omitted fields keep their value |
+| `DELETE /v1/projects/:id` | delete; later reads are `404 project_not_found` |
+| `POST /v1/projects/:id/shares` | publish the current bundle as a read-only share |
+
+Validation happens in the store, so every caller gets the same 400: `previewed`
+must name a file that is actually in the bundle, and `settings` must parse to a
+JSON object (≤16 KB). Replacing the sources clears a `previewed` pointer whose
+file is gone rather than leaving it dangling.
+
 ## Architecture
 
 ```
@@ -241,6 +263,7 @@ Every knob is an environment variable.
 | `GLYPH_CORS` | `*` | `Access-Control-Allow-Origin` |
 | `GLYPH_LOG` | `info` | `silent` \| `info` \| `debug` |
 | `GLYPH_SHARES_DIR` | `server/.data/shares` | one JSON file per share token |
+| `GLYPH_PROJECTS_DIR` | `server/.data/projects` | one JSON file per project id |
 | `GLYPH_APP_URL` | `http://localhost:5173` | origin used to build the canonical `/project/:token` URL |
 
 ## Fonts
@@ -256,6 +279,10 @@ for versions and licenses.
   permission, as with the reference app's read-only links, but there is no
   expiry, quota, or audit trail. Put the create/delete routes behind auth and add
   a sweep job before a public deployment.
+- **Projects have no owner.** Every project in `GLYPH_PROJECTS_DIR` is reachable
+  by anyone who can reach the service; there are no accounts, folders, or
+  permissions yet. The store is shaped so an owner field and a per-user filter
+  can be added without changing the routes.
 - **Diagnostics have no positions.** `typst.ts` 0.7.0 reports `range: null` for
   every diagnostic and folds hints into the message text. The editor's squiggles
   therefore come from the browser engine (`typst-ide`), which does produce

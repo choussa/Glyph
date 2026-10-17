@@ -1,9 +1,9 @@
 /**
  * A deliberately tiny HTTP layer — no framework, no router tree.
  *
- * The surface is four routes, all JSON-in/binary-out, so a `node:http` server
- * with a switch on the path is both the smallest and the fastest option: no
- * dependency, no middleware, no per-request allocation beyond the body.
+ * The surface is JSON-in/binary-out, so a `node:http` server with a switch on
+ * the path is both the smallest and the fastest option: no dependency, no
+ * middleware, no per-request allocation beyond the body.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { config } from './config.ts';
@@ -23,7 +23,7 @@ export class HttpError extends Error {
 /** Apply CORS headers (and answer preflights). Returns true if handled. */
 export function applyCors(request: IncomingMessage, response: ServerResponse): boolean {
   response.setHeader('Access-Control-Allow-Origin', config.cors);
-  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   response.setHeader(
     'Access-Control-Expose-Headers',

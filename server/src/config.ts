@@ -64,6 +64,9 @@ export const config = {
    */
   sharesDir: process.env.GLYPH_SHARES_DIR ?? join(SERVER_ROOT, '.data', 'shares'),
 
+  /** Projects persist one JSON file per id, alongside shares. */
+  projectsDir: process.env.GLYPH_PROJECTS_DIR ?? join(SERVER_ROOT, '.data', 'projects'),
+
   /** Origin used to build the canonical read-only share URL. */
   appUrl: process.env.GLYPH_APP_URL ?? 'http://localhost:5173',
 };

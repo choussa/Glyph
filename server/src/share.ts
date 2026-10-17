@@ -18,8 +18,9 @@
  * - `list()` exists for tests and administration; it is deliberately not routed.
  */
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { readJsonFile, writeJsonAtomic } from './store.ts';
 import type { SourceBundle } from './types.ts';
 
 /** 16 random bytes, base64url: the exact shape every route accepts. */
@@ -89,37 +90,25 @@ export class ShareStore {
       bundle: input.bundle,
     };
 
-    await mkdir(this.dir, { recursive: true });
-    const target = this.path(record.token);
-    const temp = `${target}.${process.pid}.${Date.now()}.tmp`;
-    await writeFile(temp, JSON.stringify(record), 'utf8');
-    await rename(temp, target);
+    await writeJsonAtomic(this.dir, `${record.token}.json`, record);
     return record;
   }
 
   /** Read a share, or throw {@link ShareNotFound} for a bad token or missing file. */
   async get(token: string): Promise<ShareRecord> {
     if (!TOKEN.test(token)) throw new ShareNotFound(token);
-    try {
-      const raw = await readFile(this.path(token), 'utf8');
-      const parsed: unknown = JSON.parse(raw);
-      // The filename is the authority: a record that disagrees was tampered with
-      // or copied, and serving it would let a token alias another document.
-      if (!isShareRecord(parsed, token)) throw new ShareNotFound(token);
-      return parsed;
-    } catch (error) {
-      if (error instanceof ShareNotFound) throw error;
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT' || error instanceof SyntaxError) throw new ShareNotFound(token);
-      throw error;
-    }
+    const parsed = await readJsonFile(this.dir, `${token}.json`);
+    // The filename is the authority: a record that disagrees was tampered with
+    // or copied, and serving it would let a token alias another document.
+    if (!isShareRecord(parsed, token)) throw new ShareNotFound(token);
+    return parsed;
   }
 
   /** Revoke a share. Returns false when it was already gone. */
   async remove(token: string): Promise<boolean> {
     if (!TOKEN.test(token)) return false;
     try {
-      await rm(this.path(token));
+      await rm(join(this.dir, `${token}.json`));
       return true;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
@@ -141,12 +130,8 @@ export class ShareStore {
       names
         .filter((name) => name.endsWith('.json'))
         .map(async (name) => {
-          try {
-            const parsed: unknown = JSON.parse(await readFile(join(this.dir, name), 'utf8'));
-            return isShareRecord(parsed) ? parsed : null;
-          } catch {
-            return null;
-          }
+          const parsed = await readJsonFile(this.dir, name);
+          return isShareRecord(parsed) ? parsed : null;
         }),
     );
 
@@ -183,10 +168,6 @@ export class ShareStore {
       .replace(/\s+/g, '-')
       .slice(0, 80);
     return `${stem || 'document'}.pdf`;
-  }
-
-  private path(token: string): string {
-    return join(this.dir, `${token}.json`);
   }
 }
 

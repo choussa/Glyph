@@ -295,7 +295,9 @@ test('the HTTP server boots and serves every route', async (t) => {
   const { spawn } = await import('node:child_process');
   const port = 8791;
   const sharesDir = await mkdtemp(join(tmpdir(), 'glyph-http-shares-'));
+  const projectsDir = await mkdtemp(join(tmpdir(), 'glyph-http-projects-'));
   t.after(() => rm(sharesDir, { recursive: true, force: true }));
+  t.after(() => rm(projectsDir, { recursive: true, force: true }));
   const server = spawn(process.execPath, ['src/index.ts'], {
     cwd: new URL('..', import.meta.url).pathname,
     env: {
@@ -304,6 +306,7 @@ test('the HTTP server boots and serves every route', async (t) => {
       GLYPH_RENDER_WORKERS: '1',
       GLYPH_LOG: 'silent',
       GLYPH_SHARES_DIR: sharesDir,
+      GLYPH_PROJECTS_DIR: projectsDir,
     },
     stdio: 'ignore',
   });
@@ -456,6 +459,102 @@ test('the HTTP server boots and serves every route', async (t) => {
   const revoked = await fetch(`${base}/shares/${share.token}`, { method: 'DELETE' });
   assert.equal(revoked.status, 204);
   assert.equal((await fetch(`${base}/shares/${share.token}`)).status, 404);
+
+  /* ------------------------------------------------------------- projects */
+
+  const noProjectFiles = await fetch(`${base}/projects`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ name: 'No files' }),
+  });
+  assert.equal(noProjectFiles.status, 400);
+
+  const projectCreated = await fetch(`${base}/projects`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      name: 'On attention',
+      settings: '{"theme":"dark"}',
+      previewed: '/chapter.typ',
+      files: { '/main.typ': DOC, '/chapter.typ': '= Chapter\n' },
+    }),
+  });
+  assert.equal(projectCreated.status, 201);
+  const project = (await projectCreated.json()) as {
+    id: string;
+    name: string;
+    entry: string;
+    previewed: string;
+    files: number;
+  };
+  assert.match(project.id, /^on-attention-[0-9a-f]{6}$/);
+  assert.equal(project.name, 'On attention');
+  assert.equal(project.entry, '/main.typ');
+  assert.equal(project.previewed, '/chapter.typ');
+  assert.equal(project.files, 2);
+
+  // The full project keeps its sources; the list projection does not.
+  const full = (await (await fetch(`${base}/projects/${project.id}`)).json()) as {
+    bundle: { files: Record<string, string> };
+    settings: string;
+  };
+  assert.equal(full.bundle.files['/chapter.typ'], '= Chapter\n');
+  assert.equal(full.settings, '{"theme":"dark"}');
+
+  const listed = (await (await fetch(`${base}/projects`)).json()) as {
+    projects: { id: string; name: string }[];
+  };
+  assert.equal(listed.projects.some((entry) => entry.id === project.id), true);
+  assert.equal(JSON.stringify(listed).includes('= Chapter'), false, 'list leaked sources');
+
+  // A rename sends only `name`; sources must survive.
+  const renamed = await fetch(`${base}/projects/${project.id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ name: 'Attention, renamed' }),
+  });
+  assert.equal(renamed.status, 200);
+  const afterRename = (await renamed.json()) as { name: string; files: number };
+  assert.equal(afterRename.name, 'Attention, renamed');
+  assert.equal(afterRename.files, 2);
+
+  const badPreviewed = await fetch(`${base}/projects/${project.id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ previewed: '/missing.typ' }),
+  });
+  assert.equal(badPreviewed.status, 400);
+  assert.equal(((await badPreviewed.json()) as { error: string }).error, 'invalid_project');
+
+  const badSettings = await fetch(`${base}/projects/${project.id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ settings: 'not json' }),
+  });
+  assert.equal(badSettings.status, 400);
+
+  // A project can be published as a read-only share in one step.
+  const projectShare = await fetch(`${base}/projects/${project.id}/shares`, { method: 'POST' });
+  assert.equal(projectShare.status, 201);
+  const projectShareBody = (await projectShare.json()) as { token: string; title: string };
+  assert.equal(projectShareBody.title, 'Attention, renamed');
+  const projectShareSummary = (await (
+    await fetch(`${base}/shares/${projectShareBody.token}`)
+  ).json()) as { files: number };
+  assert.equal(projectShareSummary.files, 2);
+
+  assert.equal(
+    (await fetch(`${base}/projects/never-made-000000`)).status,
+    404,
+    'a well-formed but absent id is 404',
+  );
+  assert.equal((await fetch(`${base}/projects/../etc`)).status, 404);
+
+  const removedProject = await fetch(`${base}/projects/${project.id}`, { method: 'DELETE' });
+  assert.equal(removedProject.status, 204);
+  const gone = await fetch(`${base}/projects/${project.id}`);
+  assert.equal(gone.status, 404);
+  assert.equal(((await gone.json()) as { error: string }).error, 'project_not_found');
 });
 
 after(() => {
