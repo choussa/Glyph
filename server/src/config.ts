@@ -29,7 +29,7 @@ function int(value: string | undefined, fallback: number): number {
  */
 export const config = {
   host: process.env.HOST ?? '0.0.0.0',
-  port: int(process.env.PORT, 8787),
+  port: int(process.env.GLYPH_RENDER_PORT ?? process.env.PORT, 8787),
 
   /**
    * Compile workers. Typst compiles synchronously and burns CPU, so real

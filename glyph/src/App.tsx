@@ -37,7 +37,7 @@ import { SettingsPanel } from './panels/SettingsPanel';
 import { PANELS, type PanelId } from './panels/registry';
 import { CursorStore } from './editor/cursorStore';
 import { runAction, type ActionName, type SelectionInfo } from './editor/insert';
-import { Workspace, useWorkspaceSnapshot } from './workspace/useWorkspace';
+import { Workspace, storageKeyFor, useWorkspaceSnapshot } from './workspace/useWorkspace';
 import { basename, normalizePath } from './workspace/model';
 import { createZip } from './workspace/zip';
 import { clearSettings, loadSettings, saveSettings, type Settings } from './settings';
@@ -45,6 +45,8 @@ import { downloadBytes, type RenderFormat } from './render/client';
 import { useRenderServer } from './render/useRenderServer';
 import { ServerPreview } from './render/ServerPreview';
 import { ZOOM_PRESETS, stepZoom, type ZoomMode } from './preview/zoom';
+import { Link, navigate } from './router';
+import { loadUser, signOut } from './product/data';
 import sampleDoc from './sample.typ?raw';
 
 type DialogKind = 'shortcuts' | 'about' | 'goto' | null;
@@ -66,12 +68,26 @@ const EXPORT_EXT: Record<Exclude<RenderFormat, 'pages'>, string> = {
 /** Whether the platform's primary modifier is ⌘ rather than Ctrl. */
 const IS_MAC = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 
-export function App() {
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+export interface AppProps {
+  projectId: string;
+  projectName: string;
+}
+
+export function App({ projectId, projectName }: AppProps) {
   /* --------------------------------------------------------------- stores */
 
   const workspaceRef = useRef<Workspace | null>(null);
   if (!workspaceRef.current) {
-    const created = new Workspace();
+    const created = new Workspace(storageKeyFor(projectId));
     created.init(sampleDoc);
     workspaceRef.current = created;
   }
@@ -83,6 +99,7 @@ export function App() {
   const cursor = cursorRef.current;
 
   const { client, state: server, refresh: refreshServer } = useRenderServer();
+  const user = loadUser();
 
   /* ---------------------------------------------------------------- state */
 
@@ -389,9 +406,9 @@ export function App() {
   const handleResetWorkspace = useCallback(() => {
     if (!window.confirm('Reset the workspace? Every file will be replaced by the sample document.'))
       return;
-    Workspace.clearStorage();
+    workspace.clearStorage();
     window.location.reload();
-  }, []);
+  }, [workspace]);
 
   const handleResetSettings = useCallback(() => {
     clearSettings();
@@ -701,6 +718,29 @@ export function App() {
     { label: 'Project archive', hint: '.zip', icon: 'download', onSelect: handleDownloadProject },
   ];
 
+  const accountItems: MenuItem[] = [
+    { label: 'Projects', icon: 'files', onSelect: () => navigate('/dashboard') },
+    { kind: 'separator' },
+    ...(user
+      ? [
+          {
+            label: 'Sign out',
+            icon: 'x' as const,
+            onSelect: () => {
+              signOut();
+              navigate('/');
+            },
+          },
+        ]
+      : [
+          {
+            label: 'Sign in',
+            icon: 'arrow-right' as const,
+            onSelect: () => navigate('/signin'),
+          },
+        ]),
+  ];
+
   const previewControls = (
     <div className="zoom">
       <button type="button" title="Zoom out (⌘−)" onClick={() => zoomBy(-1)}>
@@ -739,9 +779,21 @@ export function App() {
   return (
     <div className={`app app-layout-${layout}`}>
       <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">g</span>
-          <span className="brand-name">glyph</span>
+        <div className="topbar-lead">
+          <Link to="/dashboard" className="brand" title="Back to projects">
+            <span className="brand-mark">g</span>
+          </Link>
+          <div className="project-id">
+            <Link to="/dashboard" className="project-crumb">
+              Projects
+            </Link>
+            <span className="project-slash" aria-hidden="true">/</span>
+            <span className="project-name">{projectName}</span>
+            <span className={`save-pill${snapshot.dirty.length > 0 ? ' is-saving' : ''}`}>
+              <span className="save-dot" />
+              {snapshot.dirty.length > 0 ? 'Saving…' : 'Saved locally'}
+            </span>
+          </div>
         </div>
 
         <MenuBar
@@ -792,7 +844,22 @@ export function App() {
           onAbout={() => setDialog('about')}
         />
 
-        <div className="topbar-center">{notice && <span className="notice">{notice}</span>}</div>
+        <div className="topbar-center">
+          {notice ? (
+            <span className="notice">{notice}</span>
+          ) : (
+            <button
+              type="button"
+              className="command-trigger"
+              onClick={() => setPaletteOpen(true)}
+              title="Command palette"
+            >
+              <Icon name="search" size={14} />
+              <span>Search or jump to…</span>
+              <kbd>{IS_MAC ? '⌘K' : 'Ctrl K'}</kbd>
+            </button>
+          )}
+        </div>
 
         <div className="topbar-actions">
           <button
@@ -804,8 +871,17 @@ export function App() {
           >
             <Icon name="sidebar" size={16} />
           </button>
+          <button
+            type="button"
+            className="btn btn-share"
+            onClick={() => setServerPreview(Date.now())}
+            title="Preview the pages a share link would serve"
+          >
+            <Icon name="share" size={14} />
+            <span>Share</span>
+          </button>
           <Dropdown
-            className="menu"
+            className="menu btn btn-primary btn-export"
             panelClassName="menu-panel-end"
             align="end"
             title="Export the document"
@@ -825,6 +901,15 @@ export function App() {
           >
             <Icon name={settings.theme === 'dark' ? 'sun' : 'moon'} size={16} />
           </button>
+          <Dropdown
+            className="account-trigger"
+            panelClassName="menu-panel-end"
+            align="end"
+            title="Account"
+            items={accountItems}
+          >
+            <span className="avatar avatar-sm">{user ? initials(user.name) : 'DM'}</span>
+          </Dropdown>
         </div>
       </header>
 

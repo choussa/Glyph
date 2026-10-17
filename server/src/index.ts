@@ -338,6 +338,29 @@ const server = createServer((request, response) => {
 server.keepAliveTimeout = 65_000;
 server.headersTimeout = 70_000;
 
+/**
+ * A port conflict is the most common local failure (a stale `--watch` process,
+ * or two terminals running `npm run dev`). Node's default is an unhandled
+ * `error` event with a stack trace; say what happened and how to fix it instead.
+ */
+server.on('error', (error: NodeJS.ErrnoException) => {
+  const conflict = error.code === 'EADDRINUSE';
+  log({
+    level: 'error',
+    message: conflict
+      ? `port ${config.port} is already in use`
+      : 'render service failed to start',
+    code: error.code,
+    detail: error.message,
+    ...(conflict
+      ? {
+          hint: `stop the other process (lsof -i :${config.port}) or run both packages with GLYPH_RENDER_PORT=${config.port + 1}`,
+        }
+      : {}),
+  });
+  void pool.close().finally(() => process.exit(1));
+});
+
 async function shutdown(signal: string): Promise<void> {
   log({ level: 'info', message: `received ${signal}, shutting down` });
   server.close();

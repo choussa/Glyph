@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RenderClient, type PagesResult, type SourceBundle } from './client';
+import { RenderClient, type PagesReport, type SourceBundle } from './client';
 
 interface ServerPreviewProps {
   client: RenderClient;
@@ -11,8 +11,14 @@ interface ServerPreviewProps {
 
 interface State {
   loading: boolean;
-  result: PagesResult | null;
+  result: PagesReport | null;
   error: string | null;
+}
+
+/** The number of diagnostics of a given severity, or 0. */
+function countSeverity(report: PagesReport | null, severity: 'error' | 'warning'): number {
+  if (!report) return 0;
+  return report.diagnostics.filter((d) => d.severity === severity).length;
 }
 
 /**
@@ -59,6 +65,9 @@ export function ServerPreview({ client, bundle, revision, onClose }: ServerPrevi
   }, [onClose]);
 
   const pages = useMemo(() => state.result?.pages ?? [], [state.result]);
+  const diagnostics = state.result?.diagnostics ?? [];
+  const errors = countSeverity(state.result, 'error');
+  const warnings = countSeverity(state.result, 'warning');
 
   useEffect(() => {
     const scroller = scrollerRef.current;

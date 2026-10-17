@@ -41,7 +41,7 @@ export interface Settings {
 const KEY = 'glyph.settings.v1';
 
 export const DEFAULT_SETTINGS: Settings = {
-  theme: 'dark',
+  theme: 'light',
   layout: 'split',
   splitRatio: 0.5,
   railWidth: 48,

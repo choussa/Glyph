@@ -8,7 +8,8 @@ import wasm from 'vite-plugin-wasm';
  * In production the app talks to the deployed service directly: set
  * `VITE_RENDER_URL` at build time (it becomes the client's base URL).
  */
-const RENDER_SERVICE = 'http://localhost:8787';
+const RENDER_PORT = process.env.GLYPH_RENDER_PORT ?? '8787';
+const RENDER_SERVICE = process.env.VITE_RENDER_URL ?? `http://localhost:${RENDER_PORT}`;
 
 export default defineConfig({
   plugins: [react(), wasm()],

@@ -102,7 +102,10 @@ export function Preview({
     scroller.addEventListener('click', onClick);
     return () => {
       scroller.removeEventListener('click', onClick);
-      navRef.current = null;
+      // Only clear the host's ref if it still points at *this* navigator: the
+      // pane preview and the popup preview can mount/unmount around each other,
+      // and an unconditional `navRef.current = null` would clobber the survivor.
+      if (navRef.current === navigator) navRef.current = null;
       navigator.dispose();
     };
   }, [project, navRef]);

@@ -44,6 +44,9 @@ export interface PagesResult {
   ms: number;
 }
 
+/** `PagesResult` plus the per-response telemetry headers. */
+export type PagesReport = PagesResult & { meta: RenderMeta };
+
 /** Per-response telemetry, straight off the `X-Glyph-*` headers. */
 export interface RenderMeta {
   ms: number;
@@ -184,9 +187,10 @@ export class RenderClient {
   }
 
   /** Render one standalone SVG per page — what a share link displays. */
-  async pages(bundle: SourceBundle, signal?: AbortSignal): Promise<PagesResult> {
+  async pages(bundle: SourceBundle, signal?: AbortSignal): Promise<PagesReport> {
     const response = await this.#post('render', { ...bundle, format: 'pages' }, signal);
-    return (await response.json()) as PagesResult;
+    const report = (await response.json()) as PagesResult;
+    return { ...report, meta: readMeta(response) };
   }
 
   /** Run an introspection query against the document (e.g. `heading`). */

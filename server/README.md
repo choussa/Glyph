@@ -193,7 +193,8 @@ Every knob is an environment variable.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `PORT` | `8787` | listen port |
+| `GLYPH_RENDER_PORT` | `PORT`, else `8787` | listen port (the editor's Vite proxy reads the same variable) |
+| `PORT` | `8787` | listen port fallback when `GLYPH_RENDER_PORT` is unset |
 | `HOST` | `0.0.0.0` | listen address |
 | `GLYPH_RENDER_WORKERS` | `availableParallelism()`, max 4 | compile worker threads |
 | `GLYPH_FONTS_DIR` | `server/fonts` | font directory scanned at compiler construction |
