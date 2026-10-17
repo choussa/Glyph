@@ -44,8 +44,8 @@ resolve across files, and the whole workspace is saved to `localStorage`.
 ## Verify it
 
 ```bash
-cd server && npm test        # 25 tests: engine, cache, paths, SVG splitting, assets, HTTP
-cd glyph  && npm test        # 45 unit tests: paths, tree, outline, search, ZIP, base64, zoom
+cd server && npm test        # 48 tests: engine, cache, paths, SVG splitting, shares, projects, HTTP
+cd glyph  && npm test        # 83 unit tests: paths, tree, outline, search, ZIP, base64, zoom, formats, settings
 cd glyph  && npm run build   # typecheck + production build
 ```
 
@@ -98,7 +98,7 @@ typst-app-auth/   reverse-engineering artifacts (findings + exported API spec)
 - **Server render service: done.** Native Typst with a warm worker pool, a
   byte-budgeted render cache, in-flight coalescing, per-page SVG splitting, and a
   query API. 0.7 ms warm for a one-page PDF; ~1400 req/s at concurrency 16.
-- **Verification: started.** 45 editor unit tests and 25 server tests, committed
+- **Verification: started.** 83 editor unit tests and 48 server tests, committed
   and run in CI. Browser end-to-end tests are still to come.
 - **Next:** the server-side product surface — accounts, a dashboard, projects and
   share links. See [`plan2.md`](./plan2.md) for the prioritized list.
