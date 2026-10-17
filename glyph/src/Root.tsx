@@ -3,8 +3,9 @@ import { App } from './App';
 import { Landing } from './pages/Landing';
 import { Auth } from './pages/Auth';
 import { Dashboard } from './pages/Dashboard';
+import { SharedProject } from './pages/SharedProject';
 import { Link, projectIdFromPath, usePathname } from './router';
-import { findProject } from './product/data';
+import { findProjectOrNull, isShareToken } from './product/data';
 import { loadSettings } from './settings';
 
 const TITLES: Record<string, string> = {
@@ -30,6 +31,7 @@ function NotFound() {
 export function Root() {
   const pathname = usePathname();
   const projectId = projectIdFromPath(pathname);
+  const project = projectId ? findProjectOrNull(projectId) : null;
 
   useEffect(() => {
     document.documentElement.dataset.theme = loadSettings().theme;
@@ -37,13 +39,22 @@ export function Root() {
 
   useEffect(() => {
     document.title = projectId
-      ? `${findProject(projectId).title} · glyph`
+      ? project
+        ? `${project.title} · glyph`
+        : 'Shared document · glyph'
       : (TITLES[pathname] ?? 'glyph');
     window.scrollTo(0, 0);
-  }, [pathname, projectId]);
+    // `project` is re-read from storage on every render, so depend on its title
+    // (a stable string) rather than the object identity.
+  }, [pathname, projectId, project?.title]);
 
   if (projectId) {
-    return <App projectId={projectId} projectName={findProject(projectId).title} />;
+    // `/project/:id` is the same route for an editable project and a share
+    // token, as in the reference app. A local project id wins; a 22-char token
+    // with no local project is a read-only share.
+    if (project) return <App projectId={projectId} projectName={project.title} />;
+    if (isShareToken(projectId)) return <SharedProject token={projectId} />;
+    return <App projectId={projectId} projectName="Untitled document" />;
   }
 
   switch (pathname) {

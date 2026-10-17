@@ -162,8 +162,13 @@ export function createProject(title: string, template: TemplateId): Project {
   return project;
 }
 
+/** The local project with this id, or null when the id is not a project. */
+export function findProjectOrNull(id: string): Project | null {
+  return loadProjects().find((project) => project.id === id) ?? null;
+}
+
 export function findProject(id: string): Project {
-  return loadProjects().find((project) => project.id === id) ?? {
+  return findProjectOrNull(id) ?? {
     id,
     title: 'Untitled document',
     template: 'paper',
@@ -172,6 +177,16 @@ export function findProject(id: string): Project {
     words: 0,
     excerpt: ['Untitled document', '', ''],
   };
+}
+
+/**
+ * Whether a `/project/:id` segment is a share token rather than a project id.
+ *
+ * Share tokens are 16 random bytes, base64url-encoded (22 chars), so a local
+ * project id (a seed word or `draft-…`) can never be mistaken for one.
+ */
+export function isShareToken(id: string): boolean {
+  return /^[A-Za-z0-9_-]{22}$/.test(id);
 }
 
 /** The template a new project should open with, independent of the theme. */
