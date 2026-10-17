@@ -31,10 +31,17 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-Open <http://localhost:5173>. Type; the preview recompiles as you go. Click a page
-to jump to its source, or let the preview follow your cursor. **Export ▾** offers
-a browser PDF (instant) alongside server PDF/SVG/HTML/vector, and **Share
-preview** shows the pages a share link would serve.
+Open <http://localhost:5173>. The landing page leads to a local project
+dashboard and an editor at `/project/attention`. Type; the preview recompiles
+as you go. Click a page to jump to its source, or let the preview follow your
+cursor. **Export ▾** offers a browser PDF (instant) alongside server
+PDF/SVG/HTML/vector, and **Share preview** shows the pages a share link would
+serve.
+
+The dashboard, sign-in and sign-up screens are a **local product
+demonstration**: this repository has no account server. The account record and
+project list live in `localStorage`, and the UI says so. Workspaces are stored
+per project.
 
 The editor is a real multi-file workspace: a file tree with folders, tabs, a
 project-wide search and replace, an outline, an issues panel, a command palette
@@ -84,6 +91,8 @@ plan.md           the full build plan: architecture, data model, API contracts,
 plan2.md          the grounded continuation: verified status, the engine ruling,
                   and a prioritized gap list
 typst-app-auth/   reverse-engineering artifacts (findings + exported API spec)
+PRODUCT.md        durable product truth: users, positioning, constraints
+DESIGN.md         the visual system: paper, ink, one orange signal
 ```
 
 ## Status
@@ -98,7 +107,10 @@ typst-app-auth/   reverse-engineering artifacts (findings + exported API spec)
 - **Server render service: done.** Native Typst with a warm worker pool, a
   byte-budgeted render cache, in-flight coalescing, per-page SVG splitting, and a
   query API. 0.7 ms warm for a one-page PDF; ~1400 req/s at concurrency 16.
+- **Product surface: local demo.** Landing page, local sign-in/sign-up, project
+  dashboard with templates and live render-service status, and per-project
+  workspaces. There are no server-side accounts, collaboration or cloud sync yet.
 - **Verification: started.** 83 editor unit tests and 48 server tests, committed
   and run in CI. Browser end-to-end tests are still to come.
-- **Next:** the server-side product surface — accounts, a dashboard, projects and
-  share links. See [`plan2.md`](./plan2.md) for the prioritized list.
+- **Next:** replace the local account/dashboard demo with server-side accounts,
+  projects and share links. See [`plan2.md`](./plan2.md) for the prioritized list.

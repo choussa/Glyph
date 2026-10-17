@@ -90,6 +90,21 @@ const BLANK_DOC = `#set page(paper: "a4", margin: 2.4cm)
 Start writing. Everything here compiles as you type.
 `;
 
+/** A live `matchMedia` boolean; used to adapt the pane layout to the window. */
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setMatches(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [query]);
+
+  return matches;
+}
+
 export interface AppProps {
   projectId: string;
   projectName: string;
@@ -113,6 +128,9 @@ export function App({ projectId, projectName }: AppProps) {
 
   const { client, state: server, refresh: refreshServer } = useRenderServer();
   const user = loadUser();
+  // Below this width a horizontal split leaves two unusable columns; stack the
+  // panes instead (the View menu still lets a writer choose a single pane).
+  const narrow = useMediaQuery('(max-width: 1080px)');
 
   /* ---------------------------------------------------------------- state */
 
@@ -731,7 +749,8 @@ export function App({ projectId, projectName }: AppProps) {
 
   /* -------------------------------------------------------------- layout */
 
-  const layout = settings.layout;
+  const layout: Layout =
+    narrow && settings.layout === 'split' ? 'vertical' : settings.layout;
   const vertical = layout === 'vertical';
   const split = layout === 'split' || layout === 'vertical';
   const showEditor = layout !== 'preview';
@@ -969,6 +988,12 @@ export function App({ projectId, projectName }: AppProps) {
 
         {settings.panel && (
           <>
+            <button
+              type="button"
+              className="panel-scrim"
+              aria-label="Close the side panel"
+              onClick={() => update({ panel: null })}
+            />
             <aside className="side-panel" style={{ width: settings.panelWidth }}>
               {settings.panel === 'files' && (
                 <FilePanel

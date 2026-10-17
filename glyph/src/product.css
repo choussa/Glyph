@@ -63,9 +63,9 @@
   --border-soft: #efede7;
   --text: #141414;
   --text-muted: #5f5c55;
-  --text-faint: #77736a;
+  --text-faint: #6b675e;
   --accent: #ff6600;
-  --accent-ink: #cc4a00;
+  --accent-ink: #c44700;
   --accent-soft: rgba(255, 102, 0, 0.14);
   --accent-text: #141414;
   --ok: #1f7a4d;
@@ -150,6 +150,25 @@
   --tint: #2a1b0e;
   --solid: #f3f1ea;
   --solid-text: #141414;
+
+  --typ-comment: #918d84;
+  --typ-punct: #e8e4da;
+  --typ-escape: #9ec1ff;
+  --typ-link: #9ec1ff;
+  --typ-raw: #a8d5b5;
+  --typ-label: #d6b0ff;
+  --typ-ref: #d6b0ff;
+  --typ-heading: #ff9a66;
+  --typ-marker: #ff8a5c;
+  --typ-math-delim: #ff8a5c;
+  --typ-math-op: #ff8a5c;
+  --typ-key: #ff8a5c;
+  --typ-op: #ff8a5c;
+  --typ-num: #9ec1ff;
+  --typ-str: #8fd6a8;
+  --typ-func: #d6b0ff;
+  --typ-pol: #e8c07a;
+  --typ-error: #ff8a7d;
 }
 
 /* ------------------------------------------------------------- base and UI */
@@ -198,7 +217,7 @@ textarea:focus {
 
 kbd {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 10.5px;
   border-radius: 2px;
   border-bottom-width: 1px;
   padding: 1px 5px;
@@ -329,7 +348,7 @@ kbd {
   background: var(--solid);
   color: var(--solid-text);
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
   flex: 0 0 auto;
@@ -380,11 +399,10 @@ kbd {
   padding-left: 10px;
   border-left: 1px solid rgba(0, 0, 0, 0.28);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  opacity: 0.72;
 }
 
 .site-nav {
@@ -398,7 +416,7 @@ kbd {
   font-size: 12.5px;
   font-weight: 500;
   text-decoration: none;
-  opacity: 0.76;
+  opacity: 0.9;
 }
 
 .site-nav a:hover {
@@ -446,17 +464,17 @@ kbd {
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
-  gap: clamp(32px, 6vw, 88px);
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.45fr);
+  gap: clamp(32px, 5vw, 72px);
   align-items: end;
   padding: clamp(48px, 7vw, 86px) 0 40px;
 }
 
 .hero h1 {
   margin: 0 0 24px;
-  font-size: clamp(46px, 6.6vw, 86px);
+  font-size: clamp(40px, 5.2vw, 72px);
   font-weight: 800;
-  line-height: 0.95;
+  line-height: 0.96;
   letter-spacing: -0.04em;
 }
 
@@ -483,8 +501,8 @@ kbd {
 .hero-note {
   margin: 0;
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.07em;
+  font-size: 11px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-faint);
 }
@@ -505,9 +523,9 @@ kbd {
 
 .spec-key {
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-faint);
   white-space: nowrap;
@@ -618,21 +636,21 @@ kbd {
   margin-left: auto;
   padding: 0 14px;
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-faint);
   white-space: nowrap;
 }
 
+/* A static ring: the demo document is not actually recompiling. */
 .live-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
-  animation: live 2.8s ease-in-out infinite;
 }
 
 .stage-body {
@@ -658,8 +676,8 @@ kbd {
   padding: 0 14px;
   border-bottom: 1px solid var(--border-soft);
   font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.09em;
+  font-size: 11px;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-faint);
 }
@@ -680,11 +698,17 @@ kbd {
   flex: 1 1 auto;
   margin: 0;
   padding: 14px 0 18px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
   font-family: var(--mono);
   font-size: 11px;
   line-height: 1.8;
   color: var(--text);
+}
+
+.code::-webkit-scrollbar {
+  display: none;
 }
 
 .code-line {
@@ -697,7 +721,6 @@ kbd {
   padding-right: 12px;
   text-align: right;
   color: var(--text-faint);
-  opacity: 0.7;
   user-select: none;
 }
 
@@ -733,94 +756,23 @@ kbd {
   padding: 22px;
 }
 
-.paper {
-  width: 300px;
+/* The real compiled page, scaled to fit the desk. */
+.paper-sheet {
+  align-self: center;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
   max-height: 100%;
-  padding: 28px 26px;
   background: #ffffff;
-  color: #1b1a17;
-  font-family: var(--serif);
   box-shadow:
     0 1px 2px rgba(20, 20, 20, 0.1),
     0 16px 36px rgba(20, 20, 20, 0.12);
 }
 
-.paper-title {
-  margin: 0 0 5px;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.16;
-}
-
-.paper-byline {
-  margin: 0 0 13px;
-  color: #6b675e;
-  font-size: 7.5px;
-}
-
-.paper-abstract {
-  margin: 0 0 12px;
-  padding: 7px 0;
-  border-top: 1px solid #e4e1d9;
-  border-bottom: 1px solid #e4e1d9;
-  font-size: 8px;
-  line-height: 1.55;
-}
-
-.paper-heading {
-  margin: 12px 0 4px;
-  font-size: 9px;
-  font-weight: 700;
-}
-
-.paper p {
-  margin: 0 0 6px;
-  font-size: 8px;
-  line-height: 1.55;
-}
-
-.paper-math {
-  margin: 7px 0;
-  font-size: 8.5px;
-  text-align: center;
-}
-
-.paper-figure {
-  margin-top: 10px;
-  color: #6b675e;
-  font-size: 6.5px;
-}
-
-.paper-plot {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 46px;
-  margin-bottom: 4px;
-  padding: 4px 4px 0;
-  border-left: 1px solid #d8d4ca;
-  border-bottom: 1px solid #d8d4ca;
-}
-
-.paper-plot span {
-  flex: 1 1 0;
-  background: var(--accent);
-  opacity: 0.82;
-}
-
-.paper-plot span:nth-child(2n) {
-  opacity: 0.55;
-}
-
-.paper-plot span:nth-child(3n) {
-  opacity: 0.38;
-}
-
 .stage-caption {
   margin: 12px 0 0;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 12.5px;
 }
 
 /* Statement, workflow, proof -------------------------------------------- */
@@ -902,9 +854,9 @@ kbd {
 .row-index {
   padding-top: 3px;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent-ink);
 }
@@ -917,7 +869,7 @@ kbd {
 }
 
 .row-main p {
-  max-width: 66ch;
+  max-width: 56ch;
   margin: 0;
   color: var(--text-muted);
   font-size: 13.5px;
@@ -937,9 +889,9 @@ kbd {
   border-radius: 2px;
   background: var(--panel-alt);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-faint);
   white-space: nowrap;
@@ -991,7 +943,7 @@ kbd {
 .proof-table dd {
   margin: 0;
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 12.5px;
   text-align: right;
   color: var(--text);
 }
@@ -1035,13 +987,13 @@ kbd {
 }
 
 .final-cta-actions span {
-  max-width: 30ch;
+  max-width: 32ch;
   font-family: var(--mono);
-  font-size: 9.5px;
-  letter-spacing: 0.06em;
+  font-size: 11px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   text-align: right;
-  opacity: 0.78;
+  color: #141414;
 }
 
 .site-foot {
@@ -1148,7 +1100,7 @@ kbd {
 
 .field > span:first-child {
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -1183,7 +1135,7 @@ kbd {
   background: transparent;
   color: var(--text-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
@@ -1225,7 +1177,7 @@ kbd {
 
 .auth-demo strong {
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent-ink);
@@ -1233,7 +1185,7 @@ kbd {
 
 .auth-demo span {
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.55;
 }
 
@@ -1256,7 +1208,7 @@ kbd {
 .auth-foot {
   margin: 0;
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 11px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -1296,7 +1248,7 @@ kbd {
 
 .auth-aside-meta {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: #b4b0a6;
@@ -1332,7 +1284,7 @@ kbd {
   padding: 11px 0;
   border-top: 1px solid #363530;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -1383,7 +1335,7 @@ kbd {
 .dash-nav-label {
   padding: 0 10px 8px;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -1422,7 +1374,7 @@ kbd {
 .dash-nav-count {
   margin-left: auto;
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 11px;
   color: var(--text-faint);
 }
 
@@ -1444,7 +1396,7 @@ kbd {
   gap: 12px;
   margin-bottom: 7px;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -1466,7 +1418,7 @@ kbd {
 .storage-block p {
   margin: 8px 0 0;
   color: var(--text-faint);
-  font-size: 10.5px;
+  font-size: 12.5px;
   line-height: 1.5;
 }
 
@@ -1507,7 +1459,7 @@ kbd {
 .account-name span {
   overflow: hidden;
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1612,7 +1564,7 @@ kbd {
 
 .dash-crumb {
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -1638,7 +1590,7 @@ kbd {
 .new-project-label {
   padding: 8px 10px 6px;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -1662,7 +1614,7 @@ kbd {
 
 .new-project-menu button span:last-child {
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 11px;
   color: var(--text-faint);
 }
 
@@ -1740,13 +1692,13 @@ kbd {
 .filter-tabs button span {
   margin-left: 6px;
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 10.5px;
   color: var(--text-faint);
 }
 
 .filter-summary {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -1768,7 +1720,7 @@ kbd {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -1860,7 +1812,7 @@ kbd {
 .doc-name span {
   overflow: hidden;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -1876,7 +1828,7 @@ kbd {
 .project-pages,
 .project-words {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 11.5px;
 }
 
 .project-open {
@@ -1978,14 +1930,14 @@ kbd {
 
 .template-copy span {
   color: var(--text-faint);
-  font-size: 10.5px;
+  font-size: 11.5px;
 }
 
 .template-size {
   padding: 3px 6px;
   border: 1px solid var(--border);
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: 11px;
   letter-spacing: 0.05em;
   color: var(--text-faint);
 }
@@ -2017,7 +1969,7 @@ kbd {
   align-items: center;
   gap: 7px;
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 11px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -2091,7 +2043,7 @@ kbd {
 
 .engine-facts dt {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -2198,7 +2150,7 @@ kbd {
 .project-crumb {
   color: var(--text-faint);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10.5px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   text-decoration: none;
@@ -2235,7 +2187,7 @@ kbd {
   border-left: 1px solid var(--border);
   color: var(--text-faint);
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: 9.5px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -2288,7 +2240,7 @@ kbd {
   background: var(--panel-alt);
   border: 1px solid var(--border);
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: 10.5px;
 }
 
 .command-trigger:hover {
@@ -2389,7 +2341,7 @@ kbd {
 .zoom-value {
   min-width: 42px;
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 10.5px;
 }
 
 .account-trigger {
@@ -2405,7 +2357,7 @@ kbd {
 .avatar-sm {
   width: 28px;
   height: 28px;
-  font-size: 9.5px;
+  font-size: 10px;
 }
 
 .rail {
@@ -2445,7 +2397,7 @@ kbd {
   background: var(--accent);
   color: #141414;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
 }
 
@@ -2473,7 +2425,7 @@ kbd {
 
 .panel-count {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text-faint);
 }
 
@@ -2536,7 +2488,7 @@ kbd {
 .file-size,
 .file-count {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text-faint);
 }
 
@@ -2547,7 +2499,7 @@ kbd {
 
 .settings-group h3 {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10.5px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -2607,7 +2559,7 @@ kbd {
 
 .pane-title {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -2616,7 +2568,7 @@ kbd {
 
 .pane-meta {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text-faint);
 }
 
@@ -2680,7 +2632,7 @@ kbd {
 
 .tab-entry {
   border-color: var(--border);
-  font-size: 8px;
+  font-size: 9px;
 }
 
 .tab-dot {
@@ -2797,7 +2749,7 @@ kbd {
   border-top: 0;
   color: #b9b5ab;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 10.5px;
 }
 
 :root[data-theme='dark'] .statusbar {
@@ -2817,7 +2769,7 @@ kbd {
   border: 0;
   background: #2b2b27;
   color: #f3f1ea;
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.06em;
 }
 
@@ -2901,12 +2853,12 @@ kbd {
 
 .menu-kbd {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .menu-hint {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .dialog {
@@ -2956,22 +2908,11 @@ kbd {
   }
 }
 
-@keyframes live {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .stage-shell {
     animation: none;
   }
 
-  .live-dot,
   .service-checking .service-dot,
   .save-pill.is-saving .save-dot {
     animation: none;
@@ -2985,6 +2926,54 @@ kbd {
 }
 
 /* -------------------------------------------------------------- responsive */
+
+@media (max-width: 1180px) {
+  .project-crumb,
+  .project-slash,
+  .save-pill {
+    display: none;
+  }
+
+  .project-name {
+    max-width: 280px;
+  }
+}
+
+.panel-scrim {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .side-panel {
+    width: 220px !important;
+  }
+
+  .panel-scrim {
+    position: fixed;
+    inset: var(--topbar-h) 0 var(--statusbar-h) var(--rail-w);
+    z-index: 19;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: rgba(20, 20, 20, 0.32);
+    cursor: pointer;
+  }
+
+  .menubar,
+  .topbar-center,
+  .zoom {
+    display: none;
+  }
+
+  .btn-share span {
+    display: none;
+  }
+
+  .btn-share,
+  .btn-export {
+    padding: 0 9px;
+  }
+}
 
 @media (max-width: 1024px) {
   .hero {
@@ -3098,7 +3087,7 @@ kbd {
 
   .stage-status {
     padding: 0 10px;
-    font-size: 8.5px;
+    font-size: 11px;
   }
 
   .stage-source {
@@ -3113,8 +3102,8 @@ kbd {
     max-height: 300px;
   }
 
-  .paper {
-    width: 280px;
+  .paper-sheet {
+    max-width: 280px;
   }
 
   .statement,

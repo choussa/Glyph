@@ -1690,7 +1690,6 @@ code {
   align-items: center;
   gap: 20px;
   padding: 24px;
-  scroll-behavior: smooth;
 }
 
 .page {

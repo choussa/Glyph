@@ -1,13 +1,19 @@
 import { Link } from '../router';
 import { Icon } from '../ui/Icon';
 
+/**
+ * The exact source compiled into `public/sample-page.svg`. The page shown in
+ * the preview is real engine output, not a hand-built mock; regenerate the
+ * asset if this source changes.
+ */
 const SOURCE: { text: string; tone?: string }[][] = [
   [{ text: '#set', tone: 'key' }, { text: ' page(paper: ' }, { text: '"a4"', tone: 'str' }, { text: ', margin: ' }, { text: '2.4cm', tone: 'num' }, { text: ')' }],
   [{ text: '#set', tone: 'key' }, { text: ' text(font: ' }, { text: '"Libertinus Serif"', tone: 'str' }, { text: ', size: ' }, { text: '11pt', tone: 'num' }, { text: ')' }],
   [{ text: '#set', tone: 'key' }, { text: ' par(justify: ' }, { text: 'true', tone: 'pol' }, { text: ', leading: ' }, { text: '0.62em', tone: 'num' }, { text: ')' }],
+  [{ text: '#set', tone: 'key' }, { text: ' heading(numbering: ' }, { text: '"1."', tone: 'str' }, { text: ')' }],
   [],
   [{ text: '#align', tone: 'func' }, { text: '(center)[' }],
-  [{ text: '  #text', tone: 'func' }, { text: '(size: ' }, { text: '19pt', tone: 'num' }, { text: ', weight: ' }, { text: '"bold"', tone: 'str' }, { text: ')[On the shape of attention]' }],
+  [{ text: '  #text', tone: 'func' }, { text: '(size: ' }, { text: '19pt', tone: 'num' }, { text: ', weight: ' }, { text: '"bold"', tone: 'str' }, { text: ')[On the shape of attention] \\' }],
   [{ text: '  #text', tone: 'func' }, { text: '(size: ' }, { text: '9pt', tone: 'num' }, { text: ')[A. Rivera · Institute for Cognitive Systems]' }],
   [{ text: ']' }],
   [],
@@ -19,6 +25,8 @@ const SOURCE: { text: string; tone?: string }[][] = [
   [{ text: '= Method' }],
   [{ text: 'For a query $Q$, key $K$ and value $V$:' }],
   [{ text: '$ "Attention"(Q, K, V) = "softmax"(Q K^top / sqrt(d)) V $' }],
+  [{ text: 'The result is computed once per head and concatenated. Figure 1 reports' }],
+  [{ text: 'the distribution over a held-out set of 1,024 sequences.' }],
 ];
 
 export function Landing() {
@@ -121,8 +129,8 @@ export function Landing() {
                 <span className="stage-tab">
                   <Icon name="image" size={12} /> figures/
                 </span>
-                <span className="stage-status">
-                  <span className="live-dot" /> Compiled in 2 ms
+                <span className="stage-status" title="Rendered from the source on the left by the Typst engine">
+                  <span className="live-dot" /> Typst output
                 </span>
               </div>
               <div className="stage-body">
@@ -149,44 +157,24 @@ export function Landing() {
                 <div className="stage-preview">
                   <div className="stage-preview-head">
                     <span>Preview</span>
-                    <span>1 page · 595 × 842 pt</span>
+                    <span>1 page · 596 × 842 pt</span>
                   </div>
                   <div className="paper-desk">
-                    <article className="paper">
-                      <h2 className="paper-title">On the shape of attention</h2>
-                      <p className="paper-byline">A. Rivera · Institute for Cognitive Systems</p>
-                      <div className="paper-abstract">
-                        <strong>Abstract.</strong> We study how attention distributes across
-                        a sequence, and why the shape of that distribution predicts recall.
-                      </div>
-                      <h3 className="paper-heading">1&nbsp;&nbsp;Method</h3>
-                      <p>
-                        For a query <em>Q</em>, key <em>K</em> and value <em>V</em>:
-                      </p>
-                      <div className="paper-math">
-                        Attention(Q, K, V) = softmax(QK<sup>T</sup>/√d)V
-                      </div>
-                      <p>
-                        The result is computed once per head and concatenated. Figure 1
-                        reports the distribution over a held-out set of 1,024 sequences.
-                      </p>
-                      <div className="paper-figure">
-                        <div className="paper-plot" aria-hidden="true">
-                          {[38, 62, 48, 76, 55, 84, 68, 92, 74, 88].map((height, index) => (
-                            <span key={index} style={{ height: `${height}%` }} />
-                          ))}
-                        </div>
-                        <span>Figure 1. Attention mass by position.</span>
-                      </div>
-                    </article>
+                    <img
+                      className="paper-sheet"
+                      src="/sample-page.svg"
+                      width={596}
+                      height={842}
+                      alt="A compiled Typst page: On the shape of attention, by A. Rivera, with an abstract, a method section and a bar-chart figure."
+                    />
                   </div>
                 </div>
               </div>
             </div>
           </div>
           <p className="stage-caption">
-            A real document in a real editor. The page on the right is compiled Typst, not
-            a mock-up.
+            The page on the right is real Typst output from the source on the left,
+            compiled by glyph&rsquo;s engine rather than drawn by hand.
           </p>
         </section>
 
@@ -285,7 +273,7 @@ export function Landing() {
             </div>
             <div>
               <dt>Server test suite</dt>
-              <dd>23 passing checks</dd>
+              <dd>48 passing checks</dd>
             </div>
             <div>
               <dt>Network calls while typing</dt>

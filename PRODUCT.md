@@ -64,7 +64,7 @@ local product demonstration unless a real backend is added.
 
 ## Evidence on Hand
 
-- `server/test/render.test.ts`: 23 passing tests covering engine, cache, paths,
+- `server/test/render.test.ts`: 48 passing tests covering engine, cache, paths,
   SVG splitting and HTTP.
 - Measured render performance documented in `README.md`: ~0.7 ms warm compile,
   ~1.4 ms cached round trip on the development machine.
