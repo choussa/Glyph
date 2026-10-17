@@ -46,6 +46,7 @@ import { downloadBytes, type RenderFormat } from './render/client';
 import { useRenderServer } from './render/useRenderServer';
 import { ServerPreview } from './render/ServerPreview';
 import { ZOOM_PRESETS, stepZoom, type ZoomMode } from './preview/zoom';
+import { ENGINE_LABEL } from './typst/engine';
 import { Link, navigate } from './router';
 import { loadUser, signOut } from './product/data';
 import sampleDoc from './sample.typ?raw';
@@ -1206,7 +1207,7 @@ export function App({ projectId, projectName }: AppProps) {
       {dialog === 'about' && (
         <AboutDialog
           onClose={() => setDialog(null)}
-          engineVersion="typst-web-service 0.18.8"
+          engineVersion={ENGINE_LABEL}
           serverLabel={
             server.status === 'online'
               ? `typst.ts ${server.health.engine.version} (${server.health.pool.size} workers)`

@@ -381,6 +381,7 @@ server.listen(config.port, config.host, () => {
     message: 'glyph render service listening',
     url: `http://${config.host}:${config.port}`,
     engine: ENGINE_VERSION,
+    typst: ENGINE.typst,
     workers: stats.size,
     warmMs: stats.warmMs,
     cacheMB: Math.round(config.cacheBytes / 1024 / 1024),

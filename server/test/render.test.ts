@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { ByteLruCache } from '../src/cache.ts';
 import { normalizeDiagnostics, splitHints } from '../src/diagnostics.ts';
+import { ENGINE, ENGINE_IN_SYNC, INSTALLED_TYPST_TS } from '../src/engine.ts';
 import {
   SourceError,
   normalizeKey,
@@ -34,6 +35,27 @@ Second page.
 
 test('engine warms up', () => {
   assert.ok(warmMs >= 0);
+});
+
+/* ------------------------------------------------------------------ engine */
+
+test('the manifest matches the installed compiler package', () => {
+  assert.equal(INSTALLED_TYPST_TS, ENGINE.typstTs, 'engine.json typstTs is stale');
+  assert.equal(ENGINE_IN_SYNC, true);
+});
+
+test('the running engine compiles the Typst version the manifest records', () => {
+  // `#panic(str(sys.version))` surfaces the language version in the diagnostic,
+  // which is the only way to read it — the npm version is not the language one.
+  const outcome = renderer.render({
+    files: { '/main.typ': '#panic("VER=" + str(sys.version))\n' },
+    format: 'pdf',
+  });
+  const message = outcome.diagnostics.map((d) => d.message).join('\n');
+  assert.ok(
+    message.includes(`VER=${ENGINE.typst}`),
+    `engine reports a different Typst version than engine.json (${ENGINE.typst}): ${message}`,
+  );
 });
 
 /* ------------------------------------------------------------------- paths */
@@ -191,6 +213,16 @@ test('renders binary assets', () => {
     format: 'pdf',
   });
   assert.deepEqual(outcome.diagnostics, []);
+
+  // Prove the bytes were actually used, not silently ignored: the SVG embeds
+  // the raster as an <image> element. This is the server half of the B1 guard —
+  // the editor half is `Workspace.bundle()` in glyph/src/workspace.
+  const svg = renderer.render({
+    files: { '/main.typ': '#image("logo.png", width: 10pt)\n' },
+    assets: { '/logo.png': png },
+    format: 'svg',
+  }).artifact as string;
+  assert.match(svg, /<image\b/);
 });
 
 test('does not leak sources between requests', () => {

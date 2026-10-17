@@ -5,30 +5,41 @@
  * two compilation targets, so they must agree on the Typst *language* version:
  * that is what decides whether a given document compiles and how it lays out.
  * npm versions (`typst.ts` 0.7.0) do not tell you that, so the language version
- * is recorded here and asserted against the running engine in the test suite.
- *
- * `@vedivad/typst-web-service` bundles its own wasm (it does not depend on
- * `@myriaddreamin/typst.ts`), so the browser side cannot be derived from the
- * dependency graph — it is mirrored here and in `glyph/src/typst/engine.ts`.
+ * is recorded in the repository-wide `engine.json` (shared with the editor) and
+ * asserted against the running engine in the test suite.
  */
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
-const require = createRequire(import.meta.url);
+interface EngineManifest {
+  typst: string;
+  typstTs: string;
+  serverPackage: string;
+  browserPackage: string;
+  browserVersion: string;
+}
+
+const manifest = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../engine.json', import.meta.url)), 'utf8'),
+) as EngineManifest;
 
 export const ENGINE = {
   /** npm package that provides the native compiler. */
-  package: '@myriaddreamin/typst-ts-node-compiler',
+  package: manifest.serverPackage,
   /** Its npm version. */
-  typstTs: '0.7.0',
+  typstTs: manifest.typstTs,
   /** The Typst language version it compiles (`sys.version`). */
-  typst: '0.14.2',
+  typst: manifest.typst,
   /** The browser wrapper, for display; mirrored in the editor. */
-  browser: '@vedivad/typst-web-service@0.18.8',
+  browser: `${manifest.browserPackage}@${manifest.browserVersion}`,
 } as const;
+
+const require = createRequire(import.meta.url);
 
 /** The installed npm version, read so a skew is detectable rather than silent. */
 export const INSTALLED_TYPST_TS: string = (
-  require('@myriaddreamin/typst-ts-node-compiler/package.json') as { version: string }
+  require(`${manifest.serverPackage}/package.json`) as { version: string }
 ).version;
 
 /** `true` when the installed package matches the manifest. */

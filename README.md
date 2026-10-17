@@ -10,17 +10,12 @@ evidence (see [`typst-app-auth/FINDINGS.md`](./typst-app-auth/FINDINGS.md)).
 
 ## What's built
 
-**A working editor and a working render service, split across two Typst engines.**
-
-| | [`glyph/`](./glyph) | [`server/`](./server) |
-| --- | --- | --- |
-| What | the editor — CodeMirror 6, live vector preview, bidirectional navigation | the render service — exports, share previews, thumbnails, introspection |
-| Engine | `@vedivad/typst-web-service` (wasm, Web Worker) | `@myriaddreamin/typst-ts-node-compiler` (native, napi) |
-| Why | instant feedback, works offline, zero server cost while typing | artifacts that must not depend on a visitor's machine |
-
-Both halves are Typst, so both produce the same document. The split is about
-*where the work happens*, not about two renderers that disagree. The editor is
-fully functional with the service stopped.
+**A working editor and a working render service.** The editor compiles in the
+browser for instant feedback; the render service produces artifacts that must not
+depend on a visitor's machine. Both run the same Typst compiler (see
+[Engines](#engines)), so the split is about *where* the work happens, not about
+two renderers that disagree. The editor is fully functional with the service
+stopped.
 
 ## Run it
 
@@ -49,23 +44,45 @@ resolve across files, and the whole workspace is saved to `localStorage`.
 ## Verify it
 
 ```bash
-cd server && npm test        # 23 tests: engine, cache, paths, SVG splitting, HTTP
+cd server && npm test        # 25 tests: engine, cache, paths, SVG splitting, assets, HTTP
+cd glyph  && npm test        # 45 unit tests: paths, tree, outline, search, ZIP, base64, zoom
 cd glyph  && npm run build   # typecheck + production build
 ```
 
-Both packages also expose `npm run typecheck`. The UI was verified headlessly
-with Playwright — 39 UI checks, 28 workspace checks (cross-file imports,
-diagnostics, click-to-source, replace, ZIP, reload), 13 server-split checks and 5
-offline-degradation checks, all passing against both `vite dev` and the
-production build.
+From the repository root, `npm test` and `npm run typecheck` run both packages.
+
+The editor's pure modules — paths, the file tree, the outline scan, project-wide
+search and replace, the ZIP writer, base64 and zoom maths — have committed Vitest
+suites (`glyph/src/**/*.test.ts`). Everything runs in CI
+([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)). Browser end-to-end
+coverage (click-to-source, offline degradation, multi-file imports through the
+wasm worker) is **not** committed yet; it is the next verification step.
+
+## Engines
+
+Both halves are the same compiler in two compilation targets, so they must agree
+on the Typst version. That version is recorded once in
+[`engine.json`](./engine.json) — currently **Typst 0.14.2** — and a test asserts
+the running engine agrees, so a dependency bump cannot silently change the pages
+a reader sees.
+
+| | [`glyph/`](./glyph) | [`server/`](./server) |
+| --- | --- | --- |
+| What | the editor — CodeMirror 6, live vector preview, bidirectional navigation | the render service — exports, share previews, thumbnails, introspection |
+| Engine | `@vedivad/typst-web-service` 0.18.8 (wasm, Web Worker) | `@myriaddreamin/typst-ts-node-compiler` 0.7.0 (native, napi) |
+| Typst | 0.14.2 | 0.14.2 |
+| Why | instant feedback, works offline, zero server cost while typing | artifacts that must not depend on a visitor's machine |
 
 ## Layout
 
 ```
 glyph/            the editor (React 19 + Vite 7 + CodeMirror 6)
 server/           the render service (typst.ts native, worker pool + cache)
+engine.json       the Typst version both halves are pinned to
 plan.md           the full build plan: architecture, data model, API contracts,
                   milestones, and the RE evidence each decision rests on
+plan2.md          the grounded continuation: verified status, the engine ruling,
+                  and a prioritized gap list
 typst-app-auth/   reverse-engineering artifacts (findings + exported API spec)
 ```
 
@@ -73,14 +90,15 @@ typst-app-auth/   reverse-engineering artifacts (findings + exported API spec)
 
 - **M1 — the compiler core: done.** Live compilation, syntax highlighting,
   completion, hover, formatting, diagnostics with squiggles, click-to-source, and
-  follow-cursor, verified headlessly in both `vite dev` and the production build.
+  follow-cursor.
 - **Editor feature set: done.** Multi-file workspace (folders, tabs, drag-to-move,
   rename cascade, upload), project-wide search and replace, lexical outline,
   issues panel, settings, command palette, context menus, keyboard shortcuts,
-  ZIP export and `localStorage` persistence — all in the same two headless
-  suites.
+  ZIP export and `localStorage` persistence.
 - **Server render service: done.** Native Typst with a warm worker pool, a
   byte-budgeted render cache, in-flight coalescing, per-page SVG splitting, and a
   query API. 0.7 ms warm for a one-page PDF; ~1400 req/s at concurrency 16.
-- **Next:** M2 — auth, accounts, and the dashboard. See
-  [`plan.md`](./plan.md) §14 for the milestone list.
+- **Verification: started.** 45 editor unit tests and 25 server tests, committed
+  and run in CI. Browser end-to-end tests are still to come.
+- **Next:** the server-side product surface — accounts, a dashboard, projects and
+  share links. See [`plan2.md`](./plan2.md) for the prioritized list.
