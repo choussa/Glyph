@@ -1,0 +1,13 @@
+{
+  "name": "glyph",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A browser Typst editor with a matching native render service.",
+  "scripts": {
+    "typecheck": "npm --prefix glyph run typecheck && npm --prefix server run typecheck",
+    "test": "npm --prefix glyph test && npm --prefix server test",
+    "build": "npm --prefix glyph run build",
+    "dev:web": "npm --prefix glyph run dev",
+    "dev:render": "npm --prefix server run dev"
+  }
+}

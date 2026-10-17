@@ -29,7 +29,7 @@ function int(value: string | undefined, fallback: number): number {
  */
 export const config = {
   host: process.env.HOST ?? '0.0.0.0',
-  port: int(process.env.PORT, 8787),
+  port: int(process.env.GLYPH_RENDER_PORT ?? process.env.PORT, 8787),
 
   /**
    * Compile workers. Typst compiles synchronously and burns CPU, so real
@@ -56,6 +56,19 @@ export const config = {
 
   cors: process.env.GLYPH_CORS ?? '*',
   logLevel: (process.env.GLYPH_LOG ?? 'info') as 'silent' | 'info' | 'debug',
+
+  /**
+   * Share links persist one JSON file per token. A leaf directory is enough for
+   * this build and keeps the service dependency-free; move it to object storage
+   * when shares outgrow a disk.
+   */
+  sharesDir: process.env.GLYPH_SHARES_DIR ?? join(SERVER_ROOT, '.data', 'shares'),
+
+  /** Projects persist one JSON file per id, alongside shares. */
+  projectsDir: process.env.GLYPH_PROJECTS_DIR ?? join(SERVER_ROOT, '.data', 'projects'),
+
+  /** Origin used to build the canonical read-only share URL. */
+  appUrl: process.env.GLYPH_APP_URL ?? 'http://localhost:5173',
 };
 
 export type Config = typeof config;

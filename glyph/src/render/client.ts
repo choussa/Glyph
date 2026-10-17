@@ -44,6 +44,9 @@ export interface PagesResult {
   ms: number;
 }
 
+/** `PagesResult` plus the per-response telemetry headers. */
+export type PagesReport = PagesResult & { meta: RenderMeta };
+
 /** Per-response telemetry, straight off the `X-Glyph-*` headers. */
 export interface RenderMeta {
   ms: number;
@@ -53,10 +56,24 @@ export interface RenderMeta {
   warnings: number;
 }
 
+/** The public projection of a share link. Never contains source text. */
+export interface ShareSummary {
+  token: string;
+  title: string;
+  /** Canonical read-only URL, `/project/:token`. */
+  url: string;
+  entry: string;
+  createdAt: string;
+  updatedAt: string;
+  files: number;
+  assets: number;
+}
+
 export interface HealthReport {
   ok: boolean;
   service: string;
-  engine: { package: string; version: string };
+  /** `typst` is the language version both engines are pinned to. */
+  engine: { package: string; version: string; typst?: string };
   uptimeMs: number;
   pool: {
     size: number;
@@ -184,9 +201,10 @@ export class RenderClient {
   }
 
   /** Render one standalone SVG per page — what a share link displays. */
-  async pages(bundle: SourceBundle, signal?: AbortSignal): Promise<PagesResult> {
+  async pages(bundle: SourceBundle, signal?: AbortSignal): Promise<PagesReport> {
     const response = await this.#post('render', { ...bundle, format: 'pages' }, signal);
-    return (await response.json()) as PagesResult;
+    const report = (await response.json()) as PagesResult;
+    return { ...report, meta: readMeta(response) };
   }
 
   /** Run an introspection query against the document (e.g. `heading`). */
@@ -198,6 +216,61 @@ export class RenderClient {
   ): Promise<{ result: unknown; ms: number }> {
     const response = await this.#post('query', { ...bundle, selector, field }, signal);
     return (await response.json()) as { result: unknown; ms: number };
+  }
+
+  /* ----------------------------------------------------------- share links */
+
+  async #getJson<T>(
+    path: string,
+    signal?: AbortSignal,
+  ): Promise<{ body: T; response: Response }> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/v1/${path}`, { signal });
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') throw error;
+      throw new RenderError('render service is unreachable', 0);
+    }
+    if (!response.ok) {
+      let message = `request failed (${response.status})`;
+      try {
+        const payload = (await response.json()) as { error?: string; message?: string };
+        message = payload.message ?? payload.error ?? message;
+      } catch {
+        /* non-JSON error body */
+      }
+      throw new RenderError(message, response.status);
+    }
+    return { body: (await response.json()) as T, response };
+  }
+
+  /** Persist a bundle and get its read-only token back. */
+  async createShare(
+    bundle: SourceBundle,
+    title?: string,
+    signal?: AbortSignal,
+  ): Promise<ShareSummary> {
+    const response = await this.#post('shares', { ...bundle, title }, signal);
+    return (await response.json()) as ShareSummary;
+  }
+
+  /** Metadata for a share. Throws `RenderError` with status 404 when revoked. */
+  async share(token: string, signal?: AbortSignal): Promise<ShareSummary> {
+    return (await this.#getJson<ShareSummary>(`shares/${encodeURIComponent(token)}`, signal)).body;
+  }
+
+  /** The rendered pages of a share — the same payload as `pages()`. */
+  async sharePages(token: string, signal?: AbortSignal): Promise<PagesReport> {
+    const { body, response } = await this.#getJson<PagesResult>(
+      `shares/${encodeURIComponent(token)}/pages`,
+      signal,
+    );
+    return { ...body, meta: readMeta(response) };
+  }
+
+  /** A direct URL for the share's PDF (used as a download link). */
+  sharePdfUrl(token: string): string {
+    return `${this.baseUrl}/v1/shares/${encodeURIComponent(token)}/pdf`;
   }
 }
 

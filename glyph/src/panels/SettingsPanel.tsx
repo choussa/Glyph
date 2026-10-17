@@ -220,8 +220,14 @@ export function SettingsPanel({ settings, onChange, onReset }: SettingsPanelProp
         <section className="settings-group">
           <h3>Storage</h3>
           <p className="settings-note">
-            Text files, tabs, and preferences are saved to this browser automatically. Uploaded
-            binary assets live for the session only.
+            Text files and tabs are saved to this browser automatically. Uploaded binary assets
+            live for the session only.
+          </p>
+          <p className="settings-note">
+            Preferences are layered: editor behaviour (theme, font, editor toggles) belongs to the
+            signed-in profile, preview view settings (zoom, follow) belong to the open project, and
+            window layout belongs to this browser. In this build every layer is stored locally —
+            there is no account service yet.
           </p>
         </section>
       </div>

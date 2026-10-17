@@ -5,13 +5,14 @@
  * module owns the *shape* of a project — which files exist, how they nest, what
  * headings a document has, and where a string occurs across all of them.
  */
+import { isTextPath as isTextFormat } from './formats';
 
 /* ------------------------------------------------------------------- paths */
 
 /** `/a//b.typ`, `./a/b.typ` and `a/b.typ` all normalise to `/a/b.typ`. */
 export function normalizePath(path: string): string {
-  const clean = path.replace(/^\/*/, '').replace(/\/+/g, '/').replace(/\/+$/, '');
-  return `/${clean}`;
+  const segments = path.split('/').filter((segment) => segment !== '' && segment !== '.');
+  return `/${segments.join('/')}`;
 }
 
 /** The final segment of a path. `/a/b.typ` -> `b.typ`. */
@@ -39,9 +40,14 @@ export function extensionOf(path: string): string {
   return at <= 0 ? '' : name.slice(at + 1).toLowerCase();
 }
 
-/** Whether a path names a file the engine should treat as text. */
+/**
+ * Whether a path names a file the editor treats as editable text.
+ *
+ * Derived from the format registry rather than a second regex, so the tree, the
+ * upload path, and the engine's text/binary split cannot drift apart.
+ */
 export function isTextPath(path: string): boolean {
-  return /\.(typ|txt|md|json|toml|yaml|yml|csv|bib|csl|xml|html|css|js|ts)$/i.test(path);
+  return isTextFormat(path);
 }
 
 /** Whether a path sits inside a directory (at any depth). */

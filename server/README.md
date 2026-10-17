@@ -29,7 +29,7 @@ No build step: Node ≥ 22.18 runs the TypeScript directly via type stripping, a
 the compiler is a prebuilt native addon.
 
 ```bash
-npm test               # 23 tests: engine, cache, paths, SVG splitting, HTTP
+npm test               # 48 tests: engine, cache, paths, SVG splitting, shares, projects, HTTP
 npm run typecheck      # tsc --noEmit
 npm run bench          # measured latency + throughput
 ```
@@ -46,7 +46,11 @@ Pool, cache, and counter stats — used by the editor's server indicator.
 ```json
 {
   "ok": true,
-  "engine": { "package": "@myriaddreamin/typst-ts-node-compiler", "version": "0.7.0" },
+  "engine": {
+    "package": "@myriaddreamin/typst-ts-node-compiler",
+    "version": "0.7.0",
+    "typst": "0.14.2"
+  },
   "pool": { "size": 2, "idle": 2, "queued": 0, "inFlight": 0, "completed": 61, "restarts": 0, "warmMs": 49.4 },
   "cache": { "entries": 61, "bytes": 1299690, "hits": 221, "misses": 61, "hitRate": 0.7837 }
 }
@@ -125,6 +129,57 @@ Introspection on a compiled document — the outline panel is
 The font files the engine resolves, so a client can tell a user which families
 are available.
 
+### Share links
+
+A share is a stored `SourceBundle` behind an unguessable token. The reader gets
+rendered pages and a PDF; the sources never leave the server.
+
+```jsonc
+// POST /v1/shares  → 201
+{ "title": "On the shape of attention", "files": { "/main.typ": "= Hi\n" } }
+// → {
+//     "token": "8oQ2…", "title": "On the shape of attention",
+//     "url": "http://localhost:5173/project/8oQ2…",
+//     "entry": "/main.typ", "createdAt": "…", "updatedAt": "…",
+//     "files": 1, "assets": 0
+//   }
+```
+
+| Route | What it does |
+| --- | --- |
+| `POST /v1/shares` | persist a bundle, return the token and canonical URL |
+| `GET /v1/shares/:token` | metadata only (title, entry, counts) |
+| `GET /v1/shares/:token/pages` | the same per-page SVG payload as `format: "pages"` |
+| `GET /v1/shares/:token/pdf` | the PDF, `Content-Disposition: inline` |
+| `DELETE /v1/shares/:token` | revoke; later reads are `404 share_not_found` |
+
+Tokens are 128 random bits, base64url-encoded. They are validated against that
+alphabet before touching the filesystem, so a crafted token cannot escape the
+store directory. One JSON file per token lives under `GLYPH_SHARES_DIR` and is
+written atomically (temp file + rename).
+
+### Projects
+
+A project is a source bundle plus the reference app's editable fields — `name`,
+`previewed` (the file the preview shows), and `settings` (a JSON object string),
+matching its `EditProject` contract. Ids are readable slugs with a random suffix
+(`on-attention-3f9a01`); a project id is a name in a URL, while a share token is
+the thing that must be unguessable.
+
+| Route | What it does |
+| --- | --- |
+| `GET /v1/projects` | summaries (no sources), most recently updated first |
+| `POST /v1/projects` | create from a bundle; body also takes `name`, `previewed`, `settings` |
+| `GET /v1/projects/:id` | the full record, sources included |
+| `PUT /v1/projects/:id` | change any of `name`/`previewed`/`settings`/`files`; omitted fields keep their value |
+| `DELETE /v1/projects/:id` | delete; later reads are `404 project_not_found` |
+| `POST /v1/projects/:id/shares` | publish the current bundle as a read-only share |
+
+Validation happens in the store, so every caller gets the same 400: `previewed`
+must name a file that is actually in the bundle, and `settings` must parse to a
+JSON object (≤16 KB). Replacing the sources clears a `previewed` pointer whose
+file is gone rather than leaving it dangling.
+
 ## Architecture
 
 ```
@@ -193,7 +248,8 @@ Every knob is an environment variable.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `PORT` | `8787` | listen port |
+| `GLYPH_RENDER_PORT` | `PORT`, else `8787` | listen port (the editor's Vite proxy reads the same variable) |
+| `PORT` | `8787` | listen port fallback when `GLYPH_RENDER_PORT` is unset |
 | `HOST` | `0.0.0.0` | listen address |
 | `GLYPH_RENDER_WORKERS` | `availableParallelism()`, max 4 | compile worker threads |
 | `GLYPH_FONTS_DIR` | `server/fonts` | font directory scanned at compiler construction |
@@ -206,6 +262,9 @@ Every knob is an environment variable.
 | `GLYPH_EVICT_EVERY` | `256` | evict the engine memo cache every N compiles (`0` disables) |
 | `GLYPH_CORS` | `*` | `Access-Control-Allow-Origin` |
 | `GLYPH_LOG` | `info` | `silent` \| `info` \| `debug` |
+| `GLYPH_SHARES_DIR` | `server/.data/shares` | one JSON file per share token |
+| `GLYPH_PROJECTS_DIR` | `server/.data/projects` | one JSON file per project id |
+| `GLYPH_APP_URL` | `http://localhost:5173` | origin used to build the canonical `/project/:token` URL |
 
 ## Fonts
 
@@ -216,6 +275,14 @@ for versions and licenses.
 
 ## Known limitations
 
+- **Shares are unauthenticated and never expire.** Possession of the token is the
+  permission, as with the reference app's read-only links, but there is no
+  expiry, quota, or audit trail. Put the create/delete routes behind auth and add
+  a sweep job before a public deployment.
+- **Projects have no owner.** Every project in `GLYPH_PROJECTS_DIR` is reachable
+  by anyone who can reach the service; there are no accounts, folders, or
+  permissions yet. The store is shaped so an owner field and a per-user filter
+  can be added without changing the routes.
 - **Diagnostics have no positions.** `typst.ts` 0.7.0 reports `range: null` for
   every diagnostic and folds hints into the message text. The editor's squiggles
   therefore come from the browser engine (`typst-ide`), which does produce

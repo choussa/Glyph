@@ -12,7 +12,12 @@
  *   click-to-source and scroll-to-source.
  */
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { PreviewNavigator, type CompileResult, type TypstProject } from '@vedivad/typst-web-service';
+import {
+  PreviewNavigator,
+  type CompileResult,
+  type RenderedSvgPage,
+  type TypstProject,
+} from '@vedivad/typst-web-service';
 import { PT_TO_PX, computeScale, type PageBox, type ZoomMode } from './preview/zoom';
 import { Icon } from './ui/Icon';
 
@@ -33,6 +38,75 @@ interface RenderedPage {
   element: HTMLElement;
   width: number;
   height: number;
+  /**
+   * A canonical form of the page's SVG (see `pageSignature`). Two compiles that
+   * leave a page byte-for-byte equivalent produce the same signature, so the
+   * page's DOM node can be kept instead of torn down and rebuilt.
+   */
+  signature: string;
+}
+
+/**
+ * Canonical form of a rendered page for change detection.
+ *
+ * Typst names its SVG glyphs with generated ids, and re-rendering can hand the
+ * same page different ids, so comparing raw markup would rebuild every page on
+ * every compile. Mapping each id to its first-seen ordinal erases that noise:
+ * two renders of the same page normalize to the same string.
+ */
+function pageSignature(svg: string): string {
+  const seen = new Map<string, string>();
+  return svg.replace(/(id="|href="#)([A-Za-z0-9_-]+)/g, (_match, lead: string, id: string) => {
+    let canonical = seen.get(id);
+    if (canonical === undefined) {
+      canonical = `p${seen.size}`;
+      seen.set(id, canonical);
+    }
+    return lead + canonical;
+  });
+}
+
+/** Build one page node — the engine's SVG plus a page-number badge. */
+function createPage(page: RenderedSvgPage, scale: number): RenderedPage {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'page';
+  wrapper.dataset.index = String(page.index);
+  wrapper.innerHTML = page.svg;
+
+  const svg = wrapper.querySelector('svg');
+  if (svg) {
+    svg.removeAttribute('width');
+    svg.removeAttribute('height');
+    svg.style.width = '100%';
+    svg.style.height = 'auto';
+    svg.style.display = 'block';
+  }
+
+  const badge = document.createElement('span');
+  badge.className = 'page-number';
+  badge.textContent = String(page.index + 1);
+  wrapper.appendChild(badge);
+
+  // Size it now rather than waiting for the zoom effect, so a freshly built
+  // page is never painted at the wrong width.
+  wrapper.style.width = `${(page.width * PT_TO_PX * scale).toFixed(2)}px`;
+
+  return { element: wrapper, width: page.width, height: page.height, signature: pageSignature(page.svg) };
+}
+
+/** The rendered page whose top edge sits closest to the scroller's top edge. */
+function nearestPage(scroller: HTMLElement, pages: RenderedPage[]): HTMLElement | null {
+  const top = scroller.getBoundingClientRect().top;
+  let best: HTMLElement | null = null;
+  let bestDistance = Infinity;
+  for (const page of pages) {
+    const distance = Math.abs(page.element.getBoundingClientRect().top - top);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = page.element;
+    }
+  }
+  return best;
 }
 
 export function Preview({
@@ -46,6 +120,7 @@ export function Preview({
 }: PreviewProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const pagesRef = useRef<RenderedPage[]>([]);
+  const scaleRef = useRef(1);
   const onSourceRef = useRef(onSource);
   onSourceRef.current = onSource;
 
@@ -102,7 +177,10 @@ export function Preview({
     scroller.addEventListener('click', onClick);
     return () => {
       scroller.removeEventListener('click', onClick);
-      navRef.current = null;
+      // Only clear the host's ref if it still points at *this* navigator: the
+      // pane preview and the popup preview can mount/unmount around each other,
+      // and an unconditional `navRef.current = null` would clobber the survivor.
+      if (navRef.current === navigator) navRef.current = null;
       navigator.dispose();
     };
   }, [project, navRef]);
@@ -129,6 +207,12 @@ export function Preview({
     let cancelled = false;
     const previousScroll = scroller.scrollTop;
 
+    // Anchor the viewport to the page nearest the top edge. Reusing that page's
+    // node and measuring it again after the update lets us cancel any shift
+    // caused by reflow above it, so the text under the reader stays put.
+    const anchor = nearestPage(scroller, pagesRef.current);
+    const anchorTop = anchor ? anchor.getBoundingClientRect().top : 0;
+
     (async () => {
       let pages;
       try {
@@ -138,38 +222,47 @@ export function Preview({
       }
       if (cancelled) return;
 
-      const fragment = document.createDocumentFragment();
-      const boxes: RenderedPage[] = [];
+      const previous = pagesRef.current;
+      const boxes: RenderedPage[] = pages.map((page, index) => {
+        const prior = previous[index];
+        const signature = pageSignature(page.svg);
 
-      for (const page of pages) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'page';
-        wrapper.dataset.index = String(page.index);
-        wrapper.innerHTML = page.svg;
-
-        const svg = wrapper.querySelector('svg');
-        if (svg) {
-          svg.removeAttribute('width');
-          svg.removeAttribute('height');
-          svg.style.width = '100%';
-          svg.style.height = 'auto';
-          svg.style.display = 'block';
+        // An unchanged page keeps its node (and its painted pixels); only the
+        // pages a compile actually changed are rebuilt. This is what stops the
+        // whole preview from flashing on every keystroke.
+        if (prior && prior.signature === signature) {
+          prior.width = page.width;
+          prior.height = page.height;
+          return prior;
         }
 
-        const badge = document.createElement('span');
-        badge.className = 'page-number';
-        badge.textContent = String(page.index + 1);
-        wrapper.appendChild(badge);
+        const next = createPage(page, scaleRef.current);
+        if (prior) scroller.replaceChild(next.element, prior.element);
+        else scroller.appendChild(next.element);
+        return next;
+      });
 
-        fragment.appendChild(wrapper);
-        boxes.push({ element: wrapper, width: page.width, height: page.height });
+      // Drop any pages the new compile no longer has.
+      for (let i = pages.length; i < previous.length; i++) previous[i].element.remove();
+
+      pagesRef.current = boxes;
+
+      if (anchor?.isConnected) {
+        const shift = anchor.getBoundingClientRect().top - anchorTop;
+        if (shift) scroller.scrollTop += shift;
+      } else {
+        scroller.scrollTop = previousScroll;
       }
 
-      // The scroller is owned imperatively (React renders no children into it).
-      scroller.replaceChildren(fragment);
-      scroller.scrollTop = previousScroll;
-      pagesRef.current = boxes;
-      setPageBox(boxes[0] ? { width: boxes[0].width, height: boxes[0].height } : null);
+      const first = boxes[0];
+      setPageBox((prev) =>
+        (prev?.width ?? null) === (first?.width ?? null) &&
+        (prev?.height ?? null) === (first?.height ?? null)
+          ? prev
+          : first
+            ? { width: first.width, height: first.height }
+            : null,
+      );
       setRendered(true);
     })();
 
@@ -181,6 +274,7 @@ export function Preview({
   /* ------------------------------------------------------------------ zoom */
 
   const scale = computeScale(zoomMode, manualScale, container, pageBox);
+  scaleRef.current = scale;
 
   useEffect(() => {
     for (const page of pagesRef.current) {

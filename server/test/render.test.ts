@@ -7,9 +7,13 @@
  * Run: `node --test test/`
  */
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { ByteLruCache } from '../src/cache.ts';
 import { normalizeDiagnostics, splitHints } from '../src/diagnostics.ts';
+import { ENGINE, ENGINE_IN_SYNC, INSTALLED_TYPST_TS } from '../src/engine.ts';
 import {
   SourceError,
   normalizeKey,
@@ -34,6 +38,27 @@ Second page.
 
 test('engine warms up', () => {
   assert.ok(warmMs >= 0);
+});
+
+/* ------------------------------------------------------------------ engine */
+
+test('the manifest matches the installed compiler package', () => {
+  assert.equal(INSTALLED_TYPST_TS, ENGINE.typstTs, 'engine.json typstTs is stale');
+  assert.equal(ENGINE_IN_SYNC, true);
+});
+
+test('the running engine compiles the Typst version the manifest records', () => {
+  // `#panic(str(sys.version))` surfaces the language version in the diagnostic,
+  // which is the only way to read it — the npm version is not the language one.
+  const outcome = renderer.render({
+    files: { '/main.typ': '#panic("VER=" + str(sys.version))\n' },
+    format: 'pdf',
+  });
+  const message = outcome.diagnostics.map((d) => d.message).join('\n');
+  assert.ok(
+    message.includes(`VER=${ENGINE.typst}`),
+    `engine reports a different Typst version than engine.json (${ENGINE.typst}): ${message}`,
+  );
 });
 
 /* ------------------------------------------------------------------- paths */
@@ -191,6 +216,16 @@ test('renders binary assets', () => {
     format: 'pdf',
   });
   assert.deepEqual(outcome.diagnostics, []);
+
+  // Prove the bytes were actually used, not silently ignored: the SVG embeds
+  // the raster as an <image> element. This is the server half of the B1 guard —
+  // the editor half is `Workspace.bundle()` in glyph/src/workspace.
+  const svg = renderer.render({
+    files: { '/main.typ': '#image("logo.png", width: 10pt)\n' },
+    assets: { '/logo.png': png },
+    format: 'svg',
+  }).artifact as string;
+  assert.match(svg, /<image\b/);
 });
 
 test('does not leak sources between requests', () => {
@@ -259,9 +294,20 @@ test('queries the outline', () => {
 test('the HTTP server boots and serves every route', async (t) => {
   const { spawn } = await import('node:child_process');
   const port = 8791;
+  const sharesDir = await mkdtemp(join(tmpdir(), 'glyph-http-shares-'));
+  const projectsDir = await mkdtemp(join(tmpdir(), 'glyph-http-projects-'));
+  t.after(() => rm(sharesDir, { recursive: true, force: true }));
+  t.after(() => rm(projectsDir, { recursive: true, force: true }));
   const server = spawn(process.execPath, ['src/index.ts'], {
     cwd: new URL('..', import.meta.url).pathname,
-    env: { ...process.env, PORT: String(port), GLYPH_RENDER_WORKERS: '1', GLYPH_LOG: 'silent' },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      GLYPH_RENDER_WORKERS: '1',
+      GLYPH_LOG: 'silent',
+      GLYPH_SHARES_DIR: sharesDir,
+      GLYPH_PROJECTS_DIR: projectsDir,
+    },
     stdio: 'ignore',
   });
   t.after(() => server.kill('SIGKILL'));
@@ -334,6 +380,181 @@ test('the HTTP server boots and serves every route', async (t) => {
     })
   ).json()) as { result: unknown };
   assert.deepEqual(outline.result, [1, 1]);
+
+  /* ---------------------------------------------------------- share links */
+
+  const noFiles = await fetch(`${base}/shares`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ title: 'x' }),
+  });
+  assert.equal(noFiles.status, 400);
+
+  const created = await fetch(`${base}/shares`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ title: 'Shared paper', files: { '/main.typ': DOC } }),
+  });
+  assert.equal(created.status, 201);
+  const share = (await created.json()) as {
+    token: string;
+    url: string;
+    entry: string;
+    files: number;
+  };
+  assert.match(share.token, /^[A-Za-z0-9_-]{22}$/);
+  assert.equal(share.entry, '/main.typ');
+  assert.equal(share.files, 1);
+  assert.equal(share.url.endsWith(`/project/${share.token}`), true);
+  // The public projection must never carry source text.
+  assert.equal(JSON.stringify(share).includes('#set page'), false);
+
+  const summary = (await (await fetch(`${base}/shares/${share.token}`)).json()) as {
+    title: string;
+  };
+  assert.equal(summary.title, 'Shared paper');
+
+  const sharePages = (await (
+    await fetch(`${base}/shares/${share.token}/pages`)
+  ).json()) as { count: number };
+  assert.equal(sharePages.count, 2);
+
+  // A share must carry binary assets too, not only sources: this is the path
+  // that silently lost images in the editor before `bundle()` was fixed.
+  const withImage = await fetch(`${base}/shares`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      title: 'With image',
+      files: { '/main.typ': '#image("logo.png", width: 10pt)\n' },
+      assets: {
+        '/logo.png':
+          'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR4nGP4z8DwHwwZGP7//w9kAABHygj4/BTyWgAAAABJRU5ErkJggg==',
+      },
+    }),
+  });
+  assert.equal(withImage.status, 201);
+  const imageShare = (await withImage.json()) as { token: string; assets: number };
+  assert.equal(imageShare.assets, 1);
+  const imagePages = (await (
+    await fetch(`${base}/shares/${imageShare.token}/pages`)
+  ).json()) as { count: number; pages: { svg: string }[] };
+  assert.equal(imagePages.count, 1);
+  assert.match(imagePages.pages[0]!.svg, /<image\b/);
+  assert.equal((await fetch(`${base}/shares/${imageShare.token}`, { method: 'DELETE' })).status, 204);
+
+  const sharePdf = await fetch(`${base}/shares/${share.token}/pdf`);
+  assert.equal(sharePdf.status, 200);
+  assert.match(sharePdf.headers.get('content-type') ?? '', /application\/pdf/);
+  assert.match(
+    sharePdf.headers.get('content-disposition') ?? '',
+    /inline; filename="Shared-paper\.pdf"/,
+  );
+  assert.ok((await sharePdf.arrayBuffer()).byteLength > 1000);
+
+  const missing = await fetch(`${base}/shares/notatoken`);
+  assert.equal(missing.status, 404);
+  assert.equal(((await missing.json()) as { error: string }).error, 'share_not_found');
+
+  const revoked = await fetch(`${base}/shares/${share.token}`, { method: 'DELETE' });
+  assert.equal(revoked.status, 204);
+  assert.equal((await fetch(`${base}/shares/${share.token}`)).status, 404);
+
+  /* ------------------------------------------------------------- projects */
+
+  const noProjectFiles = await fetch(`${base}/projects`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ name: 'No files' }),
+  });
+  assert.equal(noProjectFiles.status, 400);
+
+  const projectCreated = await fetch(`${base}/projects`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      name: 'On attention',
+      settings: '{"theme":"dark"}',
+      previewed: '/chapter.typ',
+      files: { '/main.typ': DOC, '/chapter.typ': '= Chapter\n' },
+    }),
+  });
+  assert.equal(projectCreated.status, 201);
+  const project = (await projectCreated.json()) as {
+    id: string;
+    name: string;
+    entry: string;
+    previewed: string;
+    files: number;
+  };
+  assert.match(project.id, /^on-attention-[0-9a-f]{6}$/);
+  assert.equal(project.name, 'On attention');
+  assert.equal(project.entry, '/main.typ');
+  assert.equal(project.previewed, '/chapter.typ');
+  assert.equal(project.files, 2);
+
+  // The full project keeps its sources; the list projection does not.
+  const full = (await (await fetch(`${base}/projects/${project.id}`)).json()) as {
+    bundle: { files: Record<string, string> };
+    settings: string;
+  };
+  assert.equal(full.bundle.files['/chapter.typ'], '= Chapter\n');
+  assert.equal(full.settings, '{"theme":"dark"}');
+
+  const listed = (await (await fetch(`${base}/projects`)).json()) as {
+    projects: { id: string; name: string }[];
+  };
+  assert.equal(listed.projects.some((entry) => entry.id === project.id), true);
+  assert.equal(JSON.stringify(listed).includes('= Chapter'), false, 'list leaked sources');
+
+  // A rename sends only `name`; sources must survive.
+  const renamed = await fetch(`${base}/projects/${project.id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ name: 'Attention, renamed' }),
+  });
+  assert.equal(renamed.status, 200);
+  const afterRename = (await renamed.json()) as { name: string; files: number };
+  assert.equal(afterRename.name, 'Attention, renamed');
+  assert.equal(afterRename.files, 2);
+
+  const badPreviewed = await fetch(`${base}/projects/${project.id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ previewed: '/missing.typ' }),
+  });
+  assert.equal(badPreviewed.status, 400);
+  assert.equal(((await badPreviewed.json()) as { error: string }).error, 'invalid_project');
+
+  const badSettings = await fetch(`${base}/projects/${project.id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ settings: 'not json' }),
+  });
+  assert.equal(badSettings.status, 400);
+
+  // A project can be published as a read-only share in one step.
+  const projectShare = await fetch(`${base}/projects/${project.id}/shares`, { method: 'POST' });
+  assert.equal(projectShare.status, 201);
+  const projectShareBody = (await projectShare.json()) as { token: string; title: string };
+  assert.equal(projectShareBody.title, 'Attention, renamed');
+  const projectShareSummary = (await (
+    await fetch(`${base}/shares/${projectShareBody.token}`)
+  ).json()) as { files: number };
+  assert.equal(projectShareSummary.files, 2);
+
+  assert.equal(
+    (await fetch(`${base}/projects/never-made-000000`)).status,
+    404,
+    'a well-formed but absent id is 404',
+  );
+  assert.equal((await fetch(`${base}/projects/../etc`)).status, 404);
+
+  const removedProject = await fetch(`${base}/projects/${project.id}`, { method: 'DELETE' });
+  assert.equal(removedProject.status, 204);
+  const gone = await fetch(`${base}/projects/${project.id}`);
+  assert.equal(gone.status, 404);
+  assert.equal(((await gone.json()) as { error: string }).error, 'project_not_found');
 });
 
 after(() => {

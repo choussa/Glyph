@@ -19,15 +19,17 @@
  */
 import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { createRequire } from 'node:module';
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ByteLruCache } from './cache.ts';
 import { FONTS_DIR, config } from './config.ts';
 import { countErrors, type Diagnostic } from './diagnostics.ts';
+import { ENGINE, INSTALLED_TYPST_TS } from './engine.ts';
 import { HttpError, applyCors, log, readJson, sendBytes, sendJson } from './http.ts';
 import { SourceError, validateBundlePaths } from './paths.ts';
 import { PoolError, RenderPool } from './pool.ts';
+import { ProjectInvalid, ProjectNotFound, ProjectStore } from './project.ts';
+import { ShareNotFound, ShareStore } from './share.ts';
 import {
   FORMAT_CONTENT_TYPE,
   RENDER_FORMATS,
@@ -39,15 +41,14 @@ import {
   type SourceBundle,
 } from './types.ts';
 
-const require = createRequire(import.meta.url);
-const ENGINE_VERSION = (
-  require('@myriaddreamin/typst-ts-node-compiler/package.json') as { version: string }
-).version;
-
+/** The installed native compiler version — the manifest's `typstTs`. */
+const ENGINE_VERSION = INSTALLED_TYPST_TS;
 const startedAt = Date.now();
 const pool = new RenderPool(config.workers);
 const cache = new ByteLruCache<RenderOutcome>(config.cacheBytes, config.cacheEntries);
 const inFlight = new Map<string, Promise<RenderOutcome>>();
+const shares = new ShareStore(config.sharesDir, config.appUrl);
+const projects = new ProjectStore(config.projectsDir);
 
 let served = 0;
 let cacheHits = 0;
@@ -147,6 +148,28 @@ function outcomeHeaders(outcome: RenderOutcome, source: 'hit' | 'miss' | 'coales
   };
 }
 
+/** The `pages` payload, shared by `/v1/render` and the read-only share route. */
+function sendPages(
+  response: ServerResponse,
+  outcome: RenderOutcome,
+  headers: Record<string, string>,
+): void {
+  const pages = outcome.artifact as PagesArtifact;
+  sendJson(
+    response,
+    200,
+    {
+      width: pages.width,
+      height: pages.height,
+      count: pages.pages.length,
+      pages: pages.pages,
+      diagnostics: outcome.diagnostics,
+      ms: outcome.ms,
+    },
+    headers,
+  );
+}
+
 /** Run a render, reusing cached bytes or an identical in-flight compile. */
 async function render(
   request: RenderRequest,
@@ -182,7 +205,12 @@ async function handleHealth(response: ServerResponse): Promise<void> {
   sendJson(response, 200, {
     ok: true,
     service: 'glyph-render',
-    engine: { package: '@myriaddreamin/typst-ts-node-compiler', version: ENGINE_VERSION },
+    engine: {
+      package: ENGINE.package,
+      version: ENGINE_VERSION,
+      /** The Typst language version both engines are pinned to. */
+      typst: ENGINE.typst,
+    },
     uptimeMs: Date.now() - startedAt,
     pool: pool.stats(),
     cache: cache.stats(),
@@ -227,24 +255,154 @@ async function handleRender(
 
   const artifact = outcome.artifact;
   if (format === 'pages') {
-    const pages = artifact as PagesArtifact;
-    sendJson(
-      response,
-      200,
-      {
-        width: pages.width,
-        height: pages.height,
-        count: pages.pages.length,
-        pages: pages.pages,
-        diagnostics: outcome.diagnostics,
-        ms: outcome.ms,
-      },
-      headers,
-    );
+    sendPages(response, outcome, headers);
     return;
   }
 
   sendBytes(response, 200, artifact as Uint8Array | string, FORMAT_CONTENT_TYPE[format], headers);
+}
+
+/* ------------------------------------------------------------------- shares */
+
+/**
+ * Persist a project and return a read-only token.
+ *
+ * The body is the same `SourceBundle` shape as `/v1/render`, so a client can
+ * share exactly what it is previewing without a second serialisation.
+ */
+async function handleShareCreate(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  const body = await readJson(request);
+  const bundle = readBundle(body);
+  const title = typeof body.title === 'string' ? body.title : undefined;
+  const record = await shares.create({ title, bundle });
+  sendJson(response, 201, shares.summary(record), {
+    Location: `/v1/shares/${record.token}`,
+  });
+}
+
+async function handleShareSummary(response: ServerResponse, token: string): Promise<void> {
+  const record = await shares.get(token);
+  sendJson(response, 200, shares.summary(record));
+}
+
+async function handleShareRender(
+  token: string,
+  response: ServerResponse,
+  format: 'pages' | 'pdf',
+): Promise<void> {
+  const record = await shares.get(token);
+  const { outcome, source } = await render({ ...record.bundle, format });
+  const headers = outcomeHeaders(outcome, source);
+  served++;
+
+  if (outcome.artifact === null) {
+    sendJson(response, 422, { error: 'compile_failed', diagnostics: outcome.diagnostics }, headers);
+    return;
+  }
+
+  if (format === 'pages') {
+    sendPages(response, outcome, headers);
+    return;
+  }
+
+  sendBytes(response, 200, outcome.artifact as Uint8Array, FORMAT_CONTENT_TYPE.pdf, {
+    ...headers,
+    'Content-Disposition': `inline; filename="${shares.pdfFilename(record)}"`,
+  });
+}
+
+async function handleShareDelete(response: ServerResponse, token: string): Promise<void> {
+  const removed = await shares.remove(token);
+  if (!removed) throw new HttpError(404, `share ${token} not found`, 'share_not_found');
+  response.writeHead(204);
+  response.end();
+}
+
+/* ----------------------------------------------------------------- projects */
+
+/** The editable fields shared by create and update. */
+interface ProjectFields {
+  name?: string;
+  previewed?: string | null;
+  settings?: string | null;
+}
+
+/**
+ * Read `name`, `previewed`, and `settings` from a body.
+ *
+ * Types are checked here so the store only ever sees a string or null; the
+ * *semantics* (a valid slug-free name, a `previewed` that exists in the bundle,
+ * a JSON settings object) belong to the store and surface as 400.
+ */
+function readProjectFields(body: Record<string, unknown>): ProjectFields {
+  const fields: ProjectFields = {};
+  if (body.name !== undefined) {
+    if (typeof body.name !== 'string') {
+      throw new HttpError(400, '"name" must be a string', 'bad_field');
+    }
+    fields.name = body.name;
+  }
+  if (body.previewed !== undefined) {
+    if (body.previewed !== null && typeof body.previewed !== 'string') {
+      throw new HttpError(400, '"previewed" must be a file path or null', 'bad_field');
+    }
+    fields.previewed = body.previewed;
+  }
+  if (body.settings !== undefined) {
+    if (body.settings !== null && typeof body.settings !== 'string') {
+      throw new HttpError(400, '"settings" must be a JSON string or null', 'bad_field');
+    }
+    fields.settings = body.settings;
+  }
+  return fields;
+}
+
+async function handleProjectCreate(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  const body = await readJson(request);
+  const bundle = readBundle(body);
+  const record = await projects.create({ ...readProjectFields(body), bundle });
+  sendJson(response, 201, projects.summary(record), { Location: `/v1/projects/${record.id}` });
+}
+
+async function handleProjectList(response: ServerResponse): Promise<void> {
+  sendJson(response, 200, { projects: await projects.list() });
+}
+
+async function handleProjectGet(response: ServerResponse, id: string): Promise<void> {
+  sendJson(response, 200, await projects.get(id));
+}
+
+async function handleProjectUpdate(
+  request: IncomingMessage,
+  response: ServerResponse,
+  id: string,
+): Promise<void> {
+  const body = await readJson(request);
+  // `files` is optional on update: renaming a project should not require
+  // resending its sources.
+  const bundle = body.files === undefined ? undefined : readBundle(body);
+  const record = await projects.update(id, { ...readProjectFields(body), bundle });
+  sendJson(response, 200, projects.summary(record));
+}
+
+async function handleProjectDelete(response: ServerResponse, id: string): Promise<void> {
+  const removed = await projects.remove(id);
+  if (!removed) throw new ProjectNotFound(id);
+  response.writeHead(204);
+  response.end();
+}
+
+/** Publish a project's current bundle as a read-only share. */
+async function handleProjectShare(response: ServerResponse, id: string): Promise<void> {
+  const project = await projects.get(id);
+  const record = await shares.create({ title: project.name, bundle: project.bundle });
+  sendJson(response, 201, shares.summary(record), { Location: `/v1/shares/${record.token}` });
 }
 
 async function handleQuery(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -283,6 +441,17 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
         'GET /v1/fonts': 'fonts the engine will resolve',
         'POST /v1/render': 'compile and export (pdf | svg | pages | html | vector)',
         'POST /v1/query': 'introspection queries (e.g. selector=heading)',
+        'POST /v1/shares': 'persist a bundle, return a read-only token',
+        'GET /v1/shares/:token': 'share metadata (never sources)',
+        'GET /v1/shares/:token/pages': 'rendered pages for a share',
+        'GET /v1/shares/:token/pdf': 'rendered PDF for a share',
+        'DELETE /v1/shares/:token': 'revoke a share',
+        'GET /v1/projects': 'list project summaries',
+        'POST /v1/projects': 'create a project from a bundle',
+        'GET /v1/projects/:id': 'the full project, sources included',
+        'PUT /v1/projects/:id': 'rename, re-point `previewed`, or replace sources',
+        'DELETE /v1/projects/:id': 'delete a project',
+        'POST /v1/projects/:id/shares': 'publish a project as a read-only share',
       },
     });
     return;
@@ -291,6 +460,43 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   if (request.method === 'GET' && path === '/v1/fonts') return handleFonts(response);
   if (request.method === 'POST' && path === '/v1/render') return handleRender(request, response, url);
   if (request.method === 'POST' && path === '/v1/query') return handleQuery(request, response);
+
+  if (path === '/v1/shares') {
+    if (request.method === 'POST') return handleShareCreate(request, response);
+    throw new HttpError(405, 'use POST /v1/shares', 'method_not_allowed');
+  }
+
+  const share = /^\/v1\/shares\/([^/]+)(?:\/(pages|pdf))?$/.exec(path);
+  if (share !== null) {
+    const token = share[1]!;
+    const artifact = share[2];
+    if (artifact === undefined) {
+      if (request.method === 'GET') return handleShareSummary(response, token);
+      if (request.method === 'DELETE') return handleShareDelete(response, token);
+    } else if (request.method === 'GET') {
+      return handleShareRender(token, response, artifact as 'pages' | 'pdf');
+    }
+    throw new HttpError(405, `unsupported method for ${path}`, 'method_not_allowed');
+  }
+
+  if (path === '/v1/projects') {
+    if (request.method === 'GET') return handleProjectList(response);
+    if (request.method === 'POST') return handleProjectCreate(request, response);
+    throw new HttpError(405, 'use GET or POST /v1/projects', 'method_not_allowed');
+  }
+
+  const project = /^\/v1\/projects\/([^/]+)(?:\/(shares))?$/.exec(path);
+  if (project !== null) {
+    const id = project[1]!;
+    if (project[2] === 'shares') {
+      if (request.method === 'POST') return handleProjectShare(response, id);
+      throw new HttpError(405, `unsupported method for ${path}`, 'method_not_allowed');
+    }
+    if (request.method === 'GET') return handleProjectGet(response, id);
+    if (request.method === 'PUT') return handleProjectUpdate(request, response, id);
+    if (request.method === 'DELETE') return handleProjectDelete(response, id);
+    throw new HttpError(405, `unsupported method for ${path}`, 'method_not_allowed');
+  }
 
   throw new HttpError(404, `no route for ${request.method} ${path}`, 'not_found');
 }
@@ -311,6 +517,22 @@ const server = createServer((request, response) => {
       }
       if (error instanceof SourceError) {
         sendJson(response, 400, { error: 'bad_source', message: error.message });
+        return;
+      }
+      if (error instanceof ShareNotFound) {
+        sendJson(response, 404, { error: 'share_not_found', message: error.message });
+        return;
+      }
+      if (error instanceof ProjectNotFound) {
+        sendJson(response, 404, { error: 'project_not_found', message: error.message });
+        return;
+      }
+      if (error instanceof ProjectInvalid) {
+        sendJson(response, 400, {
+          error: 'invalid_project',
+          field: error.field,
+          message: error.message,
+        });
         return;
       }
       if (error instanceof PoolError) {
@@ -338,6 +560,29 @@ const server = createServer((request, response) => {
 server.keepAliveTimeout = 65_000;
 server.headersTimeout = 70_000;
 
+/**
+ * A port conflict is the most common local failure (a stale `--watch` process,
+ * or two terminals running `npm run dev`). Node's default is an unhandled
+ * `error` event with a stack trace; say what happened and how to fix it instead.
+ */
+server.on('error', (error: NodeJS.ErrnoException) => {
+  const conflict = error.code === 'EADDRINUSE';
+  log({
+    level: 'error',
+    message: conflict
+      ? `port ${config.port} is already in use`
+      : 'render service failed to start',
+    code: error.code,
+    detail: error.message,
+    ...(conflict
+      ? {
+          hint: `stop the other process (lsof -i :${config.port}) or run both packages with GLYPH_RENDER_PORT=${config.port + 1}`,
+        }
+      : {}),
+  });
+  void pool.close().finally(() => process.exit(1));
+});
+
 async function shutdown(signal: string): Promise<void> {
   log({ level: 'info', message: `received ${signal}, shutting down` });
   server.close();
@@ -356,6 +601,7 @@ server.listen(config.port, config.host, () => {
     message: 'glyph render service listening',
     url: `http://${config.host}:${config.port}`,
     engine: ENGINE_VERSION,
+    typst: ENGINE.typst,
     workers: stats.size,
     warmMs: stats.warmMs,
     cacheMB: Math.round(config.cacheBytes / 1024 / 1024),

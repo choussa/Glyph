@@ -1,0 +1,8 @@
+{
+  "_comment": "Single source of truth for the engine both halves of glyph run. The editor and the render service import this file; a test in each package asserts the running engine agrees with it.",
+  "typst": "0.14.2",
+  "typstTs": "0.7.0",
+  "serverPackage": "@myriaddreamin/typst-ts-node-compiler",
+  "browserPackage": "@vedivad/typst-web-service",
+  "browserVersion": "0.18.8"
+}

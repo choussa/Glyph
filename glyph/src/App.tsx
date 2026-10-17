@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
+import { redo, undo } from '@codemirror/commands';
 import {
   TypstProject,
   type CompileResult,
@@ -37,14 +38,18 @@ import { SettingsPanel } from './panels/SettingsPanel';
 import { PANELS, type PanelId } from './panels/registry';
 import { CursorStore } from './editor/cursorStore';
 import { runAction, type ActionName, type SelectionInfo } from './editor/insert';
-import { Workspace, useWorkspaceSnapshot } from './workspace/useWorkspace';
+import { Workspace, storageKeyFor, useWorkspaceSnapshot } from './workspace/useWorkspace';
 import { basename, normalizePath } from './workspace/model';
+import { classifyUpload } from './workspace/formats';
 import { createZip } from './workspace/zip';
 import { clearSettings, loadSettings, saveSettings, type Settings } from './settings';
 import { downloadBytes, type RenderFormat } from './render/client';
 import { useRenderServer } from './render/useRenderServer';
 import { ServerPreview } from './render/ServerPreview';
 import { ZOOM_PRESETS, stepZoom, type ZoomMode } from './preview/zoom';
+import { ENGINE_LABEL } from './typst/engine';
+import { Link, navigate } from './router';
+import { loadUser, signOut } from './product/data';
 import sampleDoc from './sample.typ?raw';
 
 type DialogKind = 'shortcuts' | 'about' | 'goto' | null;
@@ -66,13 +71,52 @@ const EXPORT_EXT: Record<Exclude<RenderFormat, 'pages'>, string> = {
 /** Whether the platform's primary modifier is ⌘ rather than Ctrl. */
 const IS_MAC = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 
-export function App() {
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+/** A new project starts with a page, not with the demo manuscript. */
+const BLANK_DOC = `#set page(paper: "a4", margin: 2.4cm)
+#set text(font: "Libertinus Serif", size: 11pt)
+#set par(justify: true)
+
+= Untitled document
+
+Start writing. Everything here compiles as you type.
+`;
+
+/** A live `matchMedia` boolean; used to adapt the pane layout to the window. */
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setMatches(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [query]);
+
+  return matches;
+}
+
+export interface AppProps {
+  projectId: string;
+  projectName: string;
+}
+
+export function App({ projectId, projectName }: AppProps) {
   /* --------------------------------------------------------------- stores */
 
   const workspaceRef = useRef<Workspace | null>(null);
   if (!workspaceRef.current) {
-    const created = new Workspace();
-    created.init(sampleDoc);
+    const created = new Workspace(storageKeyFor(projectId));
+    created.init(projectId === 'attention' ? sampleDoc : BLANK_DOC);
     workspaceRef.current = created;
   }
   const workspace = workspaceRef.current;
@@ -83,6 +127,10 @@ export function App() {
   const cursor = cursorRef.current;
 
   const { client, state: server, refresh: refreshServer } = useRenderServer();
+  const user = loadUser();
+  // Below this width a horizontal split leaves two unusable columns; stack the
+  // panes instead (the View menu still lets a writer choose a single pane).
+  const narrow = useMediaQuery('(max-width: 1080px)');
 
   /* ---------------------------------------------------------------- state */
 
@@ -90,7 +138,9 @@ export function App() {
   const [result, setResult] = useState<CompileResult | null>(null);
   const [status, setStatus] = useState<CompileStatus>('booting');
   const [ms, setMs] = useState(0);
-  const [settings, setSettings] = useState<Settings>(loadSettings);
+  const [settings, setSettings] = useState<Settings>(() =>
+    loadSettings({ user: user?.email, projectId }),
+  );
   const [notice, setNotice] = useState<string | null>(null);
   const [goTo, setGoTo] = useState<GoTo | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -311,11 +361,21 @@ export function App() {
 
   const handleUpload = useCallback(
     async (dir: string, files: File[]) => {
+      let added = 0;
+      const rejected: string[] = [];
       for (const file of files) {
+        // Check before reading the bytes: a refused file should cost nothing.
+        const verdict = classifyUpload(file.name, file.size);
+        if (!verdict.ok) {
+          rejected.push(`${file.name} — ${verdict.reason}`);
+          continue;
+        }
         const data = await file.arrayBuffer();
         workspace.addUpload(dir, file, data);
+        added += 1;
       }
-      flash(`Uploaded ${files.length} file${files.length === 1 ? '' : 's'}`);
+      if (added > 0) flash(`Uploaded ${added} file${added === 1 ? '' : 's'}`);
+      if (rejected.length > 0) flash(rejected.join(' · '));
     },
     [workspace, flash],
   );
@@ -389,26 +449,38 @@ export function App() {
   const handleResetWorkspace = useCallback(() => {
     if (!window.confirm('Reset the workspace? Every file will be replaced by the sample document.'))
       return;
-    Workspace.clearStorage();
+    workspace.clearStorage();
     window.location.reload();
-  }, []);
+  }, [workspace]);
 
   const handleResetSettings = useCallback(() => {
-    clearSettings();
-    setSettings(loadSettings());
+    const context = { user: user?.email, projectId };
+    clearSettings(context);
+    setSettings(loadSettings(context));
     flash('Preferences reset');
-  }, [flash]);
+  }, [flash, user?.email, projectId]);
 
   /* --------------------------------------------------------------- export */
 
   const bundle = useCallback(() => workspace.bundle(), [workspace]);
 
   const exportBrowser = useCallback(async () => {
-    const bytes = await project?.exportPdf();
-    if (!bytes) return;
-    const stem = basename(workspace.getSnapshot().entry).replace(/\.[^.]+$/, '');
-    downloadBytes(bytes, `${stem || 'document'}.pdf`, 'application/pdf');
-    flash(`browser pdf · ${(bytes.length / 1024).toFixed(0)} KB`);
+    if (!project) {
+      flash('The engine is still starting');
+      return;
+    }
+    try {
+      const bytes = await project.exportPdf();
+      if (!bytes || bytes.length === 0) {
+        flash('Browser PDF produced nothing — check the Issues panel');
+        return;
+      }
+      const stem = basename(workspace.getSnapshot().entry).replace(/\.[^.]+$/, '');
+      downloadBytes(bytes, `${stem || 'document'}.pdf`, 'application/pdf');
+      flash(`browser pdf · ${(bytes.length / 1024).toFixed(0)} KB`);
+    } catch (error) {
+      flash(`browser pdf failed · ${(error as Error).message}`);
+    }
   }, [project, workspace, flash]);
 
   const exportOnServer = useCallback(
@@ -550,9 +622,12 @@ export function App() {
   /* ------------------------------------------------------------- settings */
 
   useEffect(() => {
-    const timer = window.setTimeout(() => saveSettings(settings), 300);
+    const timer = window.setTimeout(
+      () => saveSettings(settings, { user: user?.email, projectId }),
+      300,
+    );
     return () => window.clearTimeout(timer);
-  }, [settings]);
+  }, [settings, user?.email, projectId]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
@@ -674,7 +749,8 @@ export function App() {
 
   /* -------------------------------------------------------------- layout */
 
-  const layout = settings.layout;
+  const layout: Layout =
+    narrow && settings.layout === 'split' ? 'vertical' : settings.layout;
   const vertical = layout === 'vertical';
   const split = layout === 'split' || layout === 'vertical';
   const showEditor = layout !== 'preview';
@@ -699,6 +775,29 @@ export function App() {
     { kind: 'separator' },
     { label: 'Share preview', hint: 'server', icon: 'share', onSelect: () => setServerPreview(Date.now()) },
     { label: 'Project archive', hint: '.zip', icon: 'download', onSelect: handleDownloadProject },
+  ];
+
+  const accountItems: MenuItem[] = [
+    { label: 'Projects', icon: 'files', onSelect: () => navigate('/dashboard') },
+    { kind: 'separator' },
+    ...(user
+      ? [
+          {
+            label: 'Sign out',
+            icon: 'x' as const,
+            onSelect: () => {
+              signOut();
+              navigate('/');
+            },
+          },
+        ]
+      : [
+          {
+            label: 'Sign in',
+            icon: 'arrow-right' as const,
+            onSelect: () => navigate('/signin'),
+          },
+        ]),
   ];
 
   const previewControls = (
@@ -739,9 +838,21 @@ export function App() {
   return (
     <div className={`app app-layout-${layout}`}>
       <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">g</span>
-          <span className="brand-name">glyph</span>
+        <div className="topbar-lead">
+          <Link to="/dashboard" className="brand" title="Back to projects">
+            <span className="brand-mark">g</span>
+          </Link>
+          <div className="project-id">
+            <Link to="/dashboard" className="project-crumb">
+              Projects
+            </Link>
+            <span className="project-slash" aria-hidden="true">/</span>
+            <span className="project-name">{projectName}</span>
+            <span className={`save-pill${snapshot.dirty.length > 0 ? ' is-saving' : ''}`}>
+              <span className="save-dot" />
+              {snapshot.dirty.length > 0 ? 'Saving…' : 'Saved locally'}
+            </span>
+          </div>
         </div>
 
         <MenuBar
@@ -757,12 +868,16 @@ export function App() {
           onSharePreview={() => setServerPreview(Date.now())}
           onResetWorkspace={handleResetWorkspace}
           onUndo={() => {
-            viewRef.current?.focus();
-            document.execCommand?.('undo');
+            const view = viewRef.current;
+            if (!view) return;
+            view.focus();
+            undo(view);
           }}
           onRedo={() => {
-            viewRef.current?.focus();
-            document.execCommand?.('redo');
+            const view = viewRef.current;
+            if (!view) return;
+            view.focus();
+            redo(view);
           }}
           onFormat={() => void handleFormat()}
           onFind={() => openPanel('search')}
@@ -792,7 +907,22 @@ export function App() {
           onAbout={() => setDialog('about')}
         />
 
-        <div className="topbar-center">{notice && <span className="notice">{notice}</span>}</div>
+        <div className="topbar-center">
+          {notice ? (
+            <span className="notice">{notice}</span>
+          ) : (
+            <button
+              type="button"
+              className="command-trigger"
+              onClick={() => setPaletteOpen(true)}
+              title="Command palette"
+            >
+              <Icon name="search" size={14} />
+              <span>Search or jump to…</span>
+              <kbd>{IS_MAC ? '⌘K' : 'Ctrl K'}</kbd>
+            </button>
+          )}
+        </div>
 
         <div className="topbar-actions">
           <button
@@ -804,8 +934,17 @@ export function App() {
           >
             <Icon name="sidebar" size={16} />
           </button>
+          <button
+            type="button"
+            className="btn btn-share"
+            onClick={() => setServerPreview(Date.now())}
+            title="Preview the pages a share link would serve"
+          >
+            <Icon name="share" size={14} />
+            <span>Share</span>
+          </button>
           <Dropdown
-            className="menu"
+            className="menu btn btn-primary btn-export"
             panelClassName="menu-panel-end"
             align="end"
             title="Export the document"
@@ -825,6 +964,15 @@ export function App() {
           >
             <Icon name={settings.theme === 'dark' ? 'sun' : 'moon'} size={16} />
           </button>
+          <Dropdown
+            className="account-trigger"
+            panelClassName="menu-panel-end"
+            align="end"
+            title="Account"
+            items={accountItems}
+          >
+            <span className="avatar avatar-sm">{user ? initials(user.name) : 'DM'}</span>
+          </Dropdown>
         </div>
       </header>
 
@@ -840,6 +988,12 @@ export function App() {
 
         {settings.panel && (
           <>
+            <button
+              type="button"
+              className="panel-scrim"
+              aria-label="Close the side panel"
+              onClick={() => update({ panel: null })}
+            />
             <aside className="side-panel" style={{ width: settings.panelWidth }}>
               {settings.panel === 'files' && (
                 <FilePanel
@@ -1095,7 +1249,7 @@ export function App() {
       {dialog === 'about' && (
         <AboutDialog
           onClose={() => setDialog(null)}
-          engineVersion="typst-web-service 0.18.8"
+          engineVersion={ENGINE_LABEL}
           serverLabel={
             server.status === 'online'
               ? `typst.ts ${server.health.engine.version} (${server.health.pool.size} workers)`

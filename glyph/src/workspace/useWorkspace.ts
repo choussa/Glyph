@@ -17,6 +17,8 @@
  */
 import { useSyncExternalStore } from 'react';
 import { MAIN_PATH } from '../typst/config';
+import { bytesToBase64 } from './base64';
+import { FileRejected, classifyUpload } from './formats';
 import { dirname, isInside, normalizePath, uniquePath } from './model';
 
 /* ------------------------------------------------------------ engine ops */
@@ -60,6 +62,11 @@ const EMPTY: WorkspaceSnapshot = {
 
 const STORAGE_KEY = 'glyph.workspace.v1';
 
+/** Per-project key; the original key is kept for the seeded demo project. */
+export function storageKeyFor(projectId: string): string {
+  return projectId === 'attention' ? STORAGE_KEY : `glyph.workspace.v2.${projectId}`;
+}
+
 interface Persisted {
   version: 1;
   files: { path: string; text: string }[];
@@ -95,6 +102,8 @@ export class Workspace {
   private active = '';
   private entry = MAIN_PATH;
   private ready = false;
+
+  constructor(private readonly storageKey: string = STORAGE_KEY) {}
 
   private readonly listeners = new Set<() => void>();
   private readonly contentListeners = new Set<() => void>();
@@ -203,11 +212,27 @@ export class Workspace {
     return [...this.order];
   }
 
-  /** The whole project as the render service expects it. */
-  bundle(): { entry: string; files: Record<string, string> } {
+  /** Every binary file, base64-encoded, for the render service. */
+  assetFiles(): { path: string; base64: string }[] {
+    return this.order
+      .filter((path) => this.bytes.has(path))
+      .map((path) => ({ path, base64: bytesToBase64(this.bytes.get(path)!) }));
+  }
+
+  /**
+   * The whole project as the render service expects it.
+   *
+   * Text files go in `files`; binary files go in `assets`, base64-encoded.
+   * Dropping the assets here was a real bug: a document with `#image("logo.png")`
+   * rendered server-side (export, share preview) came out with the image missing
+   * and no error, because the service never received the bytes.
+   */
+  bundle(): { entry: string; files: Record<string, string>; assets: Record<string, string> } {
     const files: Record<string, string> = {};
     for (const { path, text } of this.textFiles()) files[path] = text;
-    return { entry: this.entry, files };
+    const assets: Record<string, string> = {};
+    for (const { path, base64 } of this.assetFiles()) assets[path] = base64;
+    return { entry: this.entry, files, assets };
   }
 
   /* ------------------------------------------------------------ lifecycle */
@@ -423,11 +448,19 @@ export class Workspace {
     this.notifyContent();
   }
 
-  /** Adopt an uploaded file (binary asset or imported source). */
+  /**
+   * Adopt an uploaded file (binary asset or imported source).
+   *
+   * The acceptance rules live in the format registry, so the UI and the store
+   * agree on what is allowed; this throws {@link FileRejected} for a file the
+   * registry refuses, which keeps the store safe if a caller skips the check.
+   */
   addUpload(dir: string, file: File, data: ArrayBuffer): string {
+    const verdict = classifyUpload(file.name, data.byteLength);
+    if (!verdict.ok) throw new FileRejected(verdict.reason);
+
     const target = uniquePath(`${normalizePath(dir)}/${file.name}`, this.order);
-    const isText = /\.(typ|txt|md|json|toml|yaml|yml|csv|bib|csl)$/i.test(file.name);
-    if (isText) {
+    if (verdict.kind === 'text') {
       const text = new TextDecoder().decode(data);
       this.text.set(target, text);
       this.emit({ type: 'set', path: target, text });
@@ -494,7 +527,7 @@ export class Workspace {
     };
 
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      localStorage.setItem(this.storageKey, JSON.stringify(payload));
     } catch {
       // Quota exceeded, or storage disabled. The session keeps working.
     }
@@ -508,7 +541,7 @@ export class Workspace {
 
   private load(): Persisted | null {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(this.storageKey);
       if (!raw) return null;
       const parsed = JSON.parse(raw) as Persisted;
       if (parsed?.version !== 1 || !Array.isArray(parsed.files)) return null;
@@ -519,9 +552,9 @@ export class Workspace {
   }
 
   /** Forget the persisted project (used by “Reset workspace”). */
-  static clearStorage(): void {
+  clearStorage(): void {
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(this.storageKey);
     } catch {
       /* ignore */
     }
