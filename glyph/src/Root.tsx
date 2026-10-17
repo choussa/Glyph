@@ -5,7 +5,7 @@ import { Auth } from './pages/Auth';
 import { Dashboard } from './pages/Dashboard';
 import { SharedProject } from './pages/SharedProject';
 import { Link, projectIdFromPath, usePathname } from './router';
-import { findProjectOrNull, isShareToken } from './product/data';
+import { findProjectOrNull, isShareToken, loadUser } from './product/data';
 import { loadSettings } from './settings';
 
 const TITLES: Record<string, string> = {
@@ -34,7 +34,9 @@ export function Root() {
   const project = projectId ? findProjectOrNull(projectId) : null;
 
   useEffect(() => {
-    document.documentElement.dataset.theme = loadSettings().theme;
+    // The theme may live on the signed-in profile, so resolve with the same
+    // context the editor saves with.
+    document.documentElement.dataset.theme = loadSettings({ user: loadUser()?.email }).theme;
   }, []);
 
   useEffect(() => {

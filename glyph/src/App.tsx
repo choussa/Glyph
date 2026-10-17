@@ -120,7 +120,9 @@ export function App({ projectId, projectName }: AppProps) {
   const [result, setResult] = useState<CompileResult | null>(null);
   const [status, setStatus] = useState<CompileStatus>('booting');
   const [ms, setMs] = useState(0);
-  const [settings, setSettings] = useState<Settings>(loadSettings);
+  const [settings, setSettings] = useState<Settings>(() =>
+    loadSettings({ user: user?.email, projectId }),
+  );
   const [notice, setNotice] = useState<string | null>(null);
   const [goTo, setGoTo] = useState<GoTo | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -434,10 +436,11 @@ export function App({ projectId, projectName }: AppProps) {
   }, [workspace]);
 
   const handleResetSettings = useCallback(() => {
-    clearSettings();
-    setSettings(loadSettings());
+    const context = { user: user?.email, projectId };
+    clearSettings(context);
+    setSettings(loadSettings(context));
     flash('Preferences reset');
-  }, [flash]);
+  }, [flash, user?.email, projectId]);
 
   /* --------------------------------------------------------------- export */
 
@@ -601,9 +604,12 @@ export function App({ projectId, projectName }: AppProps) {
   /* ------------------------------------------------------------- settings */
 
   useEffect(() => {
-    const timer = window.setTimeout(() => saveSettings(settings), 300);
+    const timer = window.setTimeout(
+      () => saveSettings(settings, { user: user?.email, projectId }),
+      300,
+    );
     return () => window.clearTimeout(timer);
-  }, [settings]);
+  }, [settings, user?.email, projectId]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
